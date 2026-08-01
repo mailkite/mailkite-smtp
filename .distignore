@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+.distignore
+.editorconfig
+node_modules
+vendor
+src/**/*.map
+PLAN.md
+README.md
+composer.json
+composer.lock
+package.json
+package-lock.json
+phpcs.xml
+phpstan.neon
+tests
