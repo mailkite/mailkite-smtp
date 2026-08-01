@@ -1,4 +1,4 @@
-=== MailKite SMTP – Email Delivery & Logs ===
+=== MailKite SMTP – SMTP and Email Log Plugin for Any SMTP Provider ===
 Contributors: bucabay
 Tags: smtp, email, wp mail, email log, deliverability
 Requires at least: 6.2

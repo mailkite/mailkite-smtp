@@ -1,4 +1,4 @@
-# MailKite SMTP – Email Delivery & Logs
+# MailKite SMTP – SMTP and Email Log Plugin for Any SMTP Provider
 
 Fix WordPress email delivery. Send via [MailKite](https://mailkite.dev) (free tier,
 2-minute setup, inbound email included) or any SMTP server — with a free email log,

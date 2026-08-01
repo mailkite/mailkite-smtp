@@ -92,6 +92,10 @@ Verified against FluentSMTP, WP Mail SMTP, and Post SMTP source:
 ### Phase 5 — P1 features
 - [ ] BYO mailers: Gmail/Workspace OAuth, Brevo, SendGrid, Mailgun, SES
 - [ ] Backup connection + automatic failover (free — everyone else paywalls it)
+- [ ] **Retitle once failover + inbound ship** (claims must match shipped features):
+      "MailKite SMTP – Multi-Provider SMTP with Failover, Email Logs & Inbound Email".
+      Until then the name stays "MailKite SMTP – SMTP and Email Log Plugin for Any
+      SMTP Provider" (decided 2026-08-01; slug `mailkite-smtp` is permanent).
 - [ ] Instant failure alerts: email/Slack/Discord/Telegram (instant by default)
 - [ ] Inbound tab: routes UI + `do_action('mailkite_inbound', $message)` + docs
 - [ ] Domain health weekly re-check + drift alert

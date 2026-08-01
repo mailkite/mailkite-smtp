@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       MailKite SMTP – Email Delivery & Logs
+ * Plugin Name:       MailKite SMTP – SMTP and Email Log Plugin for Any SMTP Provider
  * Plugin URI:        https://mailkite.dev/docs/integrations/wordpress
  * Description:       Fix WordPress email delivery. Send via MailKite (2-minute setup, inbound included) or your own SMTP server, with free email logs and resend.
  * Version:           0.1.0
