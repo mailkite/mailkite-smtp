@@ -70,6 +70,17 @@ Verified against FluentSMTP, WP Mail SMTP, and Post SMTP source:
 - [x] CSV export
 
 ### Phase 3 — Admin UI & wizard (P0 — the conversion surface)
+
+> **Scope decision 2026-08-01:** v1 connects with an **API key only** — signup, domain,
+> DNS, and billing stay on app.mailkite.dev (deep-linked). We *may* build the full
+> in-admin flow later: create-account form pre-filled with `admin_email` /
+> current-user email → verify → add site domain → DNS records + check → scoped key,
+> and possibly billing/upgrade via a Stripe-checkout redirect. The API supports all
+> of it today (signup, domains/verify, keys/scoped, billing/usage) — this is a UI
+> scope choice, not a technical limit. Rationale: ongoing management (multiple
+> domains, webhooks, billing) belongs in our dashboard where it's already built and
+> maintained once; the plugin's job is connect + send + observe. Revisit after
+> measuring how many installs stall at "no API key yet".
 - [x] Minimal settings page (PHP form, nonce + caps) — functional MVP, with
       mailer-choice section toggling (MailKite → key only; SMTP → server only;
       PHP mail → neither)
