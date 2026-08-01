@@ -25,9 +25,17 @@ final class SmtpMailer {
 	 */
 	public function configure( $phpmailer ): void {
 		$settings = Options::all();
+		$forced   = \MailKite\Smtp\Mail\Interceptor::$forced_transport;
 
-		$is_fallback = \MailKite\Smtp\Mail\Interceptor::$falling_back && '' !== (string) $settings['smtp_host'];
-		if ( 'smtp' !== $settings['mailer'] && ! $is_fallback ) {
+		if ( 'php' === $forced ) {
+			return; // A routing rule explicitly picked PHP mail().
+		}
+
+		$has_host    = '' !== (string) $settings['smtp_host'];
+		$is_fallback = \MailKite\Smtp\Mail\Interceptor::$falling_back && $has_host;
+		$is_forced   = 'smtp' === $forced && $has_host;
+
+		if ( 'smtp' !== $settings['mailer'] && ! $is_fallback && ! $is_forced ) {
 			return;
 		}
 

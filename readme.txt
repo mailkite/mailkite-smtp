@@ -1,43 +1,93 @@
-=== MailKite SMTP – SMTP and Email Log Plugin for Any SMTP Provider ===
+=== MailKite SMTP – Multi-Provider SMTP with Failover, Email Logs & Inbound Email ===
 Contributors: bucabay
-Tags: smtp, email, wp mail, email log, deliverability
+Tags: smtp, email, email log, deliverability, wp mail
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Fix WordPress email delivery. Send via MailKite or your own SMTP server, with free email logs, resend, and privacy-safe redaction.
+Reliable WordPress email: MailKite, SendGrid, Brevo, Mailgun or any SMTP — free logs, automatic failover, instant alerts, inbound email.
 
 == Description ==
 
-WordPress sends email through PHP `mail()` by default — unauthenticated, often blocked, and invisible when it fails. MailKite SMTP replaces it with reliable delivery and a free email log.
+WordPress sends email through PHP `mail()` by default — unauthenticated, often blocked, and invisible when it fails. MailKite SMTP replaces it with reliable delivery, a free email log, and features every other SMTP plugin charges for.
 
-**Free forever. No Pro tier. No locked features.**
+**Free forever. No Pro tier. No locked features. Open source.**
 
-* **MailKite** (recommended): free tier, set up in about 2 minutes, inbound email included. Sign up at [mailkite.dev](https://mailkite.dev).
-* **Any SMTP server**: bring your own host and credentials.
-* **Email log with resend** — free, including failure reasons from the mail server.
-* **Privacy-safe logging**: bodies of password-reset and verification emails are not stored (on by default). Stored credentials are encrypted at rest.
-* **Force from address/name** to fix plugins that set the wrong sender.
+= Send through any provider =
+
+* **MailKite** (recommended): free tier, ~2-minute setup, open/click tracking, and the only option with **inbound email**. Sign up at [mailkite.dev](https://mailkite.dev).
+* **SendGrid, Brevo, Mailgun** — bring your own API key.
+* **Any SMTP server** — host, port, TLS/SSL, credentials.
+* **Routing rules**: send WooCommerce receipts via one provider and newsletters via another, by subject or recipient.
+
+= Never lose an email =
+
+* **Automatic failover** — if the API provider fails, the email retries through your SMTP server or PHP mail. Other plugins sell this as a Pro feature; here it is free.
+* **Instant failure alerts** — email, Slack, Discord, or any webhook, the moment a send fails (rate-limited, no alert storms).
+* **Email log with resend and CSV export**, configurable retention, and one-click resend of failures.
+* **Weekly summary** — sent/failed counts, top errors, and DNS status in your inbox.
+
+= Private by design =
+
+* **Auth-email redaction (on by default)**: bodies of password-reset and verification emails are never stored, so a leaked database or log page can never leak reset links.
+* Stored credentials are **encrypted at rest** (AES-256-GCM keyed from your wp-config salts).
+* No telemetry. No external calls until you connect a provider.
+
+= Receive email in WordPress (unique) =
+
+Enable the inbound webhook, point a MailKite route at it, and every incoming email fires `do_action( 'mailkite_smtp_inbound', $message )` — build reply-to-comment, email-to-ticket, approve-by-reply. Optionally forward a copy to any inbox.
+
+= For professionals =
+
+* **One-click migration** from WP Mail SMTP, Easy WP SMTP, FluentSMTP, and Post SMTP.
+* **WP-CLI**: `wp mailkite status|test|log|purge`.
+* **Site Health** integration and a **Domain Health** tab (SPF/DMARC checks with weekly drift alerts).
+* Settings export/import (secrets excluded) and `wp-config.php` constants (`MAILKITE_API_KEY`, `MAILKITE_DEFAULT_MAILER`) for automated provisioning.
 * Works with WooCommerce, Contact Form 7, WPForms, and anything using `wp_mail()`.
 
-= External service =
+= External services =
 
-When you select MailKite as your mailer and connect an API key, emails are delivered via the MailKite API (api.mailkite.dev). No data is sent to MailKite until you connect an account. See the [MailKite terms](https://mailkite.dev/terms) and [privacy policy](https://mailkite.dev/privacy).
+Emails are delivered through the provider you select and connect: MailKite (api.mailkite.dev — [terms](https://mailkite.dev/terms), [privacy](https://mailkite.dev/privacy)), SendGrid, Brevo, or Mailgun, each using your own account and API key. No data is sent to any of them until you configure it. Optional failure alerts POST to the Slack/Discord/webhook URL you provide.
 
 == Frequently Asked Questions ==
 
 = Is this plugin really free? =
 
-Yes. Every feature in this plugin is free and always will be. MailKite (the email service) has free and paid plans, but you can also use this plugin with any SMTP server and never touch MailKite.
+Yes. Every feature is free and always will be — including logs, failover, and alerts. MailKite (the email service) has free and paid plans, but the plugin works fully with your own SMTP server or SendGrid/Brevo/Mailgun keys and never requires a MailKite account.
 
 = Why are some log entries missing a body? =
 
-Password-reset, login, and verification emails are stored without their body by default, so a compromised database or log page can never leak reset links. Disable in Settings if you accept the risk.
+Password-reset, login, and verification emails are stored without their body by default, so a compromised database can never leak reset links. Disable in Settings if you accept the risk.
+
+= Does it work with WooCommerce / Contact Form 7 / WPForms? =
+
+Yes — the plugin intercepts `wp_mail()`, which they all use.
+
+= How do I receive email into WordPress? =
+
+Enable the Inbound tab, copy the webhook URL into your MailKite domain settings, and handle `mailkite_smtp_inbound` in your code — or just set a forwarding address.
+
+== Screenshots ==
+
+1. Settings — choose your mailer; only the relevant section is shown.
+2. Email log with statuses, failure reasons, redaction, and resend.
+3. Inbound email webhook configuration.
+4. Domain Health — SPF/DMARC checks with weekly drift alerts.
 
 == Changelog ==
+
+= 0.2.0 =
+* SendGrid, Brevo, and Mailgun mailers (bring your own key).
+* Automatic failover to SMTP/PHP mail when an API send fails.
+* Instant failure alerts: email + Slack/Discord/webhook.
+* Routing rules by subject/recipient.
+* Inbound email webhook + `mailkite_smtp_inbound` hook + forwarding.
+* Domain Health (SPF/DMARC) with weekly drift alerts; weekly summary email.
+* Site Health tests, WP-CLI commands, settings export/import.
+* Open/click tracking toggles for MailKite sends; large attachments upload by URL.
 
 = 0.1.0 =
 * Initial release: MailKite API mailer, generic SMTP mailer, email log with redaction and resend, test emails, force-from, REST API.

@@ -25,11 +25,19 @@ final class Email {
 	/** @var string[] */
 	public array $bcc = [];
 
-	public string $subject  = '';
-	public string $message  = '';
-	public string $reply_to = '';
-	public string $from     = '';
+	/** @var string Subject line. */
+	public string $subject = '';
 
+	/** @var string Body (plain or HTML per content_type). */
+	public string $message = '';
+
+	/** @var string Reply-To address, when set. */
+	public string $reply_to = '';
+
+	/** @var string From header, "Name <email>" or bare address. */
+	public string $from = '';
+
+	/** @var string Lower-cased content type. */
 	public string $content_type = 'text/plain';
 
 	/** @var array<string, string> Remaining custom headers (lower-cased names). */
@@ -92,7 +100,7 @@ final class Email {
 		// Resolved sender, honoring the same filters core applies.
 		$from_email  = apply_filters( 'wp_mail_from', self::default_from_email() );
 		$from_name   = apply_filters( 'wp_mail_from_name', 'WordPress' );
-		$email->from = $email->from ?: sprintf( '%s <%s>', $from_name, $from_email );
+		$email->from = '' === $email->from ? sprintf( '%s <%s>', $from_name, $from_email ) : $email->from;
 
 		return $email;
 	}
@@ -105,10 +113,25 @@ final class Email {
 	}
 
 	/**
+	 * Bare from address (strips a "Name <email>" wrapper).
+	 */
+	public function from_email(): string {
+		return preg_match( '/<([^>]+)>/', $this->from, $m ) ? trim( $m[1] ) : trim( $this->from );
+	}
+
+	/**
+	 * Display name from the from header, empty when bare.
+	 */
+	public function from_name(): string {
+		return preg_match( '/^\s*(.+?)\s*</', $this->from, $m ) ? trim( $m[1], " \t\"'" ) : '';
+	}
+
+	/**
 	 * Core's default from address (mirror of wp_mail()'s fallback).
 	 */
 	private static function default_from_email(): string {
-		$sitename = wp_parse_url( network_home_url(), PHP_URL_HOST ) ?: 'localhost';
+		$sitename = (string) wp_parse_url( network_home_url(), PHP_URL_HOST );
+		$sitename = '' === $sitename ? 'localhost' : $sitename;
 		if ( str_starts_with( $sitename, 'www.' ) ) {
 			$sitename = substr( $sitename, 4 );
 		}

@@ -3,6 +3,10 @@ includes:
 
 parameters:
     level: 6
+    treatPhpDocTypesAsCertain: false
+    scanFiles:
+        - vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
+        - vendor/php-stubs/wp-cli-stubs/wp-cli-commands-stubs.php
     paths:
         - src
         - mailkite-smtp.php

@@ -37,14 +37,45 @@ final class Plugin {
 
 		if ( is_admin() ) {
 			( new Admin\Menu() )->register();
+			add_action( 'admin_init', [ self::class, 'maybe_activation_redirect' ] );
 		}
 		add_action( 'rest_api_init', [ new Admin\Rest(), 'register_routes' ] );
+		add_action( 'rest_api_init', [ new Inbound(), 'register_routes' ] );
+		add_filter( 'site_status_tests', [ new SiteHealth(), 'register' ] );
 
-		add_action( 'mailkite_smtp_purge_logs', static function (): void {
-			Log\LogTable::purge( (int) Options::get( 'log_retention' ) );
-		} );
+		add_action(
+			'mailkite_smtp_purge_logs',
+			static function (): void {
+				Log\LogTable::purge( (int) Options::get( 'log_retention' ) );
+			}
+		);
+		add_action( 'mailkite_smtp_health_check', [ Health::class, 'cron_check' ] );
+		add_action( 'mailkite_smtp_weekly_summary', [ Summary::class, 'cron_send' ] );
+
 		if ( ! wp_next_scheduled( 'mailkite_smtp_purge_logs' ) ) {
 			wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', 'mailkite_smtp_purge_logs' );
 		}
+		if ( ! wp_next_scheduled( 'mailkite_smtp_health_check' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'weekly', 'mailkite_smtp_health_check' );
+		}
+		if ( ! wp_next_scheduled( 'mailkite_smtp_weekly_summary' ) ) {
+			wp_schedule_event( time() + 2 * HOUR_IN_SECONDS, 'weekly', 'mailkite_smtp_weekly_summary' );
+		}
+	}
+
+	/**
+	 * One-time redirect to our settings page right after activation
+	 * (skipped on bulk/network activation).
+	 */
+	public static function maybe_activation_redirect(): void {
+		if ( ! get_transient( 'mailkite_smtp_activated' ) || wp_doing_ajax() || is_network_admin() ) {
+			return;
+		}
+		delete_transient( 'mailkite_smtp_activated' );
+		if ( isset( $_GET['activate-multi'] ) || ! current_user_can( 'manage_options' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only bulk-activation signal.
+			return;
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=mailkite-smtp' ) );
+		exit;
 	}
 }

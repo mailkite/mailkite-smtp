@@ -32,13 +32,34 @@ final class Commands {
 		$s = Options::all();
 
 		$rows = [
-			[ 'setting' => 'mailer', 'value' => $s['mailer'] ],
-			[ 'setting' => 'api_key', 'value' => '' !== (string) $s['api_key'] ? '(set)' : '(none)' ],
-			[ 'setting' => 'smtp_host', 'value' => $s['smtp_host'] ?: '(none)' ],
-			[ 'setting' => 'fallback_enabled', 'value' => $s['fallback_enabled'] ? 'yes' : 'no' ],
-			[ 'setting' => 'log_enabled', 'value' => $s['log_enabled'] ? 'yes' : 'no' ],
-			[ 'setting' => 'log_retention_days', 'value' => (string) $s['log_retention'] ],
-			[ 'setting' => 'alerts_enabled', 'value' => $s['alerts_enabled'] ? 'yes' : 'no' ],
+			[
+				'setting' => 'mailer',
+				'value'   => $s['mailer'],
+			],
+			[
+				'setting' => 'api_key',
+				'value'   => '' !== (string) $s['api_key'] ? '(set)' : '(none)',
+			],
+			[
+				'setting' => 'smtp_host',
+				'value'   => '' !== (string) $s['smtp_host'] ? $s['smtp_host'] : '(none)',
+			],
+			[
+				'setting' => 'fallback_enabled',
+				'value'   => $s['fallback_enabled'] ? 'yes' : 'no',
+			],
+			[
+				'setting' => 'log_enabled',
+				'value'   => $s['log_enabled'] ? 'yes' : 'no',
+			],
+			[
+				'setting' => 'log_retention_days',
+				'value'   => (string) $s['log_retention'],
+			],
+			[
+				'setting' => 'alerts_enabled',
+				'value'   => $s['alerts_enabled'] ? 'yes' : 'no',
+			],
 		];
 		WP_CLI\Utils\format_items( 'table', $rows, [ 'setting', 'value' ] );
 	}

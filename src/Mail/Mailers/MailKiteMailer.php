@@ -18,7 +18,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class MailKiteMailer implements MailerInterface {
 
-	private const MAX_INLINE_ATTACHMENT_BYTES = 10_485_760; // 10 MB total, base64-inlined.
+	private const INLINE_CUTOVER_BYTES = 2_097_152; // >2 MB total → upload once, attach by URL.
 
 	/**
 	 * Deliver via POST /v1/send.
@@ -57,6 +57,16 @@ final class MailKiteMailer implements MailerInterface {
 		}
 		if ( $email->headers ) {
 			$body['headers'] = $email->headers;
+		}
+
+		foreach ( [
+			'track_opens'  => 'trackOpens',
+			'track_clicks' => 'trackClicks',
+		] as $setting => $field ) {
+			$mode = (string) Options::get( $setting );
+			if ( 'default' !== $mode ) {
+				$body[ $field ] = 'on' === $mode;
+			}
 		}
 
 		$attachments = $this->build_attachments( $email->attachments );
@@ -98,29 +108,55 @@ final class MailKiteMailer implements MailerInterface {
 	}
 
 	/**
-	 * Inline attachments as base64 (small files); enforce a total-size cap.
+	 * Build attachments: small sets inline as base64; large sets upload to
+	 * MailKite storage first and attach by URL (POST /v1/attachments raw-body).
 	 *
 	 * @param string[] $paths Absolute file paths from wp_mail.
-	 * @return array<int, array{filename: string, content: string, contentType: string}>|WP_Error
+	 * @return array<int, array<string, string>>|WP_Error
 	 */
 	private function build_attachments( array $paths ) {
-		$attachments = [];
-		$total       = 0;
+		if ( ! $paths ) {
+			return [];
+		}
 
+		$total = 0;
 		foreach ( $paths as $path ) {
 			if ( ! is_readable( $path ) ) {
 				/* translators: %s: file path. */
 				return new WP_Error( 'mailkite_attachment', sprintf( __( 'Attachment not readable: %s', 'mailkite-smtp' ), $path ) );
 			}
 			$total += (int) filesize( $path );
-			if ( $total > self::MAX_INLINE_ATTACHMENT_BYTES ) {
-				return new WP_Error( 'mailkite_attachment', __( 'Attachments exceed the 10 MB limit for API sending.', 'mailkite-smtp' ) );
+		}
+
+		if ( $total <= self::INLINE_CUTOVER_BYTES ) {
+			return ApiAttachments::inline( $paths );
+		}
+
+		$attachments = [];
+		foreach ( $paths as $path ) {
+			$filename = wp_basename( $path );
+			$response = wp_remote_post(
+				Options::get( 'api_base' ) . '/v1/attachments?filename=' . rawurlencode( $filename ),
+				[
+					'timeout' => 60,
+					'headers' => [
+						'Authorization' => 'Bearer ' . (string) Options::get( 'api_key' ),
+						'Content-Type'  => wp_check_filetype( $path )['type'] ? wp_check_filetype( $path )['type'] : 'application/octet-stream',
+					],
+					'body'    => (string) file_get_contents( $path ), // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local attachment file.
+				]
+			);
+			if ( is_wp_error( $response ) ) {
+				return $response;
 			}
-			$type          = wp_check_filetype( $path )['type'] ?: 'application/octet-stream';
+			$payload = json_decode( wp_remote_retrieve_body( $response ), true );
+			if ( 2 !== intdiv( (int) wp_remote_retrieve_response_code( $response ), 100 ) || empty( $payload['url'] ) ) {
+				/* translators: %s: file name. */
+				return new WP_Error( 'mailkite_attachment', sprintf( __( 'Uploading attachment %s to MailKite failed.', 'mailkite-smtp' ), $filename ) );
+			}
 			$attachments[] = [
-				'filename'    => wp_basename( $path ),
-				'content'     => base64_encode( (string) file_get_contents( $path ) ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- API transport encoding, not obfuscation.
-				'contentType' => $type,
+				'filename' => $filename,
+				'url'      => (string) $payload['url'],
 			];
 		}
 

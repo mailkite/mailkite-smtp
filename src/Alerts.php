@@ -48,6 +48,32 @@ final class Alerts {
 		$data    = $error->get_error_data();
 		$subject = is_array( $data ) && ! empty( $data['subject'] ) ? (string) $data['subject'] : __( '(unknown)', 'mailkite-smtp' );
 
+		$webhook = (string) Options::get( 'alert_webhook' );
+		if ( $webhook ) {
+			$host = (string) wp_parse_url( $webhook, PHP_URL_HOST );
+			$site = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+			$text = sprintf( '✉️❌ %s: email "%s" failed — %s', $site, $subject, $message );
+			if ( str_contains( $host, 'slack.com' ) ) {
+				$json = [ 'text' => $text ];
+			} elseif ( str_contains( $host, 'discord.com' ) ) {
+				$json = [ 'content' => $text ];
+			} else {
+				$json = [
+					'site'    => $site,
+					'subject' => $subject,
+					'error'   => $message,
+				];
+			}
+			wp_remote_post(
+				$webhook,
+				[
+					'timeout' => 5,
+					'headers' => [ 'Content-Type' => 'application/json' ],
+					'body'    => wp_json_encode( $json ),
+				]
+			);
+		}
+
 		$this->sending_alert = true;
 		wp_mail(
 			$to,

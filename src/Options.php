@@ -35,7 +35,22 @@ final class Options {
 		'fallback_enabled' => true,
 		'alerts_enabled'   => false,
 		'alert_email'      => '',
+		'alert_webhook'    => '',
+		'sendgrid_key'     => '',
+		'brevo_key'        => '',
+		'mailgun_key'      => '',
+		'mailgun_domain'   => '',
+		'mailgun_region'   => 'us',
+		'track_opens'      => 'default', // default | on | off (MailKite sends only).
+		'track_clicks'     => 'default',
+		'routing_rules'    => [], // [ [ 'field' => subject|to, 'match' => str, 'mailer' => id ], ... ].
+		'inbound_enabled'  => false,
+		'inbound_secret'   => '',
+		'inbound_forward'  => '',
+		'summary_enabled'  => false,
 	];
+
+	public const MAILERS = [ 'php', 'smtp', 'mailkite', 'sendgrid', 'brevo', 'mailgun' ];
 
 	/**
 	 * All settings merged over defaults, with constant overrides applied.
@@ -46,8 +61,9 @@ final class Options {
 		$stored   = get_option( self::OPTION, [] );
 		$settings = array_merge( self::DEFAULTS, is_array( $stored ) ? $stored : [] );
 
-		$settings['api_key']       = Crypto::decrypt( (string) $settings['api_key'] );
-		$settings['smtp_password'] = Crypto::decrypt( (string) $settings['smtp_password'] );
+		foreach ( [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret' ] as $secret ) {
+			$settings[ $secret ] = Crypto::decrypt( (string) $settings[ $secret ] );
+		}
 
 		if ( defined( 'MAILKITE_API_KEY' ) && MAILKITE_API_KEY ) {
 			$settings['api_key'] = MAILKITE_API_KEY;
@@ -93,19 +109,51 @@ final class Options {
 	public static function sanitize( array $input ): array {
 		$clean = [];
 
-		if ( isset( $input['mailer'] ) && in_array( $input['mailer'], [ 'php', 'smtp', 'mailkite' ], true ) ) {
+		if ( isset( $input['mailer'] ) && in_array( $input['mailer'], self::MAILERS, true ) ) {
 			$clean['mailer'] = $input['mailer'];
 		}
-		foreach ( [ 'smtp_host', 'smtp_username' ] as $key ) {
+		foreach ( [ 'smtp_host', 'smtp_username', 'mailgun_domain' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = sanitize_text_field( (string) $input[ $key ] );
 			}
 		}
-		if ( isset( $input['api_key'] ) ) {
-			$clean['api_key'] = Crypto::encrypt( sanitize_text_field( (string) $input['api_key'] ) );
+		foreach ( [ 'api_key', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret' ] as $key ) {
+			if ( isset( $input[ $key ] ) ) {
+				$clean[ $key ] = Crypto::encrypt( sanitize_text_field( (string) $input[ $key ] ) );
+			}
 		}
 		if ( isset( $input['smtp_password'] ) ) {
 			$clean['smtp_password'] = Crypto::encrypt( (string) $input['smtp_password'] ); // Passwords keep their bytes; never rendered back.
+		}
+		if ( isset( $input['mailgun_region'] ) && in_array( $input['mailgun_region'], [ 'us', 'eu' ], true ) ) {
+			$clean['mailgun_region'] = $input['mailgun_region'];
+		}
+		foreach ( [ 'track_opens', 'track_clicks' ] as $key ) {
+			if ( isset( $input[ $key ] ) && in_array( $input[ $key ], [ 'default', 'on', 'off' ], true ) ) {
+				$clean[ $key ] = $input[ $key ];
+			}
+		}
+		if ( isset( $input['alert_webhook'] ) ) {
+			$clean['alert_webhook'] = esc_url_raw( (string) $input['alert_webhook'] );
+		}
+		if ( isset( $input['inbound_forward'] ) ) {
+			$clean['inbound_forward'] = sanitize_email( (string) $input['inbound_forward'] );
+		}
+		if ( isset( $input['routing_rules'] ) && is_array( $input['routing_rules'] ) ) {
+			$rules = [];
+			foreach ( $input['routing_rules'] as $rule ) {
+				if ( ! is_array( $rule ) || '' === trim( (string) ( $rule['match'] ?? '' ) ) ) {
+					continue;
+				}
+				if ( in_array( $rule['field'] ?? '', [ 'subject', 'to' ], true ) && in_array( $rule['mailer'] ?? '', self::MAILERS, true ) ) {
+					$rules[] = [
+						'field'  => $rule['field'],
+						'match'  => sanitize_text_field( (string) $rule['match'] ),
+						'mailer' => $rule['mailer'],
+					];
+				}
+			}
+			$clean['routing_rules'] = $rules;
 		}
 		if ( isset( $input['api_base'] ) ) {
 			$clean['api_base'] = esc_url_raw( untrailingslashit( (string) $input['api_base'] ) );
@@ -124,9 +172,9 @@ final class Options {
 		if ( isset( $input['smtp_encryption'] ) && in_array( $input['smtp_encryption'], [ 'none', 'ssl', 'tls' ], true ) ) {
 			$clean['smtp_encryption'] = $input['smtp_encryption'];
 		}
-		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ] as $key ) {
+		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled', 'inbound_enabled', 'summary_enabled' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
-				$clean[ $key ] = rest_sanitize_boolean( $input[ $key ] );
+				$clean[ $key ] = filter_var( $input[ $key ], FILTER_VALIDATE_BOOLEAN );
 			}
 		}
 		if ( isset( $input['log_retention'] ) ) {

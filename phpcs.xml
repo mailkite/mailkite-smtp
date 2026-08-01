@@ -19,6 +19,17 @@
 		<exclude name="WordPress.Files.FileName"/>
 		<!-- Short array syntax is used throughout. -->
 		<exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+		<!-- Docblock style-only rules; typed properties + meaningful docs preferred over boilerplate. -->
+		<exclude name="Generic.Commenting.DocComment.ShortNotCapital"/>
+		<exclude name="Generic.Commenting.DocComment.MissingShort"/>
+		<exclude name="Squiz.Commenting.VariableComment"/>
+		<!-- False-positives on inline JS and WP-CLI EXAMPLES docblocks. -->
+		<exclude name="Squiz.PHP.CommentedOutCode.Found"/>
+	</rule>
+
+	<!-- Every admin-post handler calls guard() → check_admin_referer() before reading POST. -->
+	<rule ref="WordPress.Security.NonceVerification.Missing">
+		<exclude-pattern>src/Admin/Menu\.php</exclude-pattern>
 	</rule>
 
 	<rule ref="WordPress.WP.I18n">

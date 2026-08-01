@@ -107,7 +107,7 @@ final class Logger {
 			return;
 		}
 
-		$this->fallback_note = sprintf( 'MailKite failed (%s) — fell back to PHPMailer.', $reason );
+		$this->fallback_note = sprintf( '%s — fell back to PHPMailer.', $reason );
 
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.

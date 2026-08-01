@@ -30,6 +30,10 @@ final class Menu {
 		add_action( 'admin_post_mailkite_smtp_resend', [ $this, 'handle_resend' ] );
 		add_action( 'admin_post_mailkite_smtp_import', [ $this, 'handle_import' ] );
 		add_action( 'admin_post_mailkite_smtp_export', [ $this, 'handle_export' ] );
+		add_action( 'admin_post_mailkite_smtp_rotate_inbound', [ $this, 'handle_rotate_inbound' ] );
+		add_action( 'admin_post_mailkite_smtp_export_settings', [ $this, 'handle_export_settings' ] );
+		add_action( 'admin_post_mailkite_smtp_import_settings', [ $this, 'handle_import_settings' ] );
+		add_action( 'admin_post_mailkite_smtp_health_check', [ $this, 'handle_health_check' ] );
 	}
 
 	/**
@@ -64,6 +68,10 @@ final class Menu {
 			$this->render_log();
 		} elseif ( 'test' === $tab ) {
 			$this->render_test();
+		} elseif ( 'inbound' === $tab ) {
+			$this->render_inbound();
+		} elseif ( 'health' === $tab ) {
+			$this->render_health();
 		} else {
 			$this->render_settings();
 		}
@@ -88,24 +96,102 @@ final class Menu {
 			'smtp_password',
 			'log_retention',
 			'alert_email',
+			'alert_webhook',
+			'sendgrid_key',
+			'brevo_key',
+			'mailgun_key',
+			'mailgun_domain',
+			'mailgun_region',
+			'track_opens',
+			'track_clicks',
 		];
 		$input  = [];
 		foreach ( $fields as $field ) {
 			if ( ! isset( $_POST[ $field ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
 				continue;
 			}
-			$blank_keeps_saved = in_array( $field, [ 'api_key', 'smtp_password' ], true );
+			$blank_keeps_saved = in_array( $field, [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key' ], true );
 			if ( $blank_keeps_saved && '' === $_POST[ $field ] ) {
 				continue; // Empty secret field means "keep the stored one".
 			}
 			$input[ $field ] = wp_unslash( $_POST[ $field ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		}
-		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ] as $bool_field ) {
+		// Checkboxes are absent from POST when unchecked, so only apply the set
+		// belonging to the form that was actually submitted (settings vs. the
+		// inbound/health tabs, which reuse this handler via _back_tab).
+		$tab      = isset( $_POST['_back_tab'] ) ? sanitize_key( wp_unslash( $_POST['_back_tab'] ) ) : 'settings';
+		$bool_map = [
+			'settings' => [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ],
+			'inbound'  => [ 'inbound_enabled' ],
+			'health'   => [ 'summary_enabled' ],
+		];
+		foreach ( $bool_map[ $tab ] ?? $bool_map['settings'] as $bool_field ) {
 			$input[ $bool_field ] = isset( $_POST[ $bool_field ] );
+		}
+		if ( isset( $_POST['inbound_forward'] ) ) {
+			$input['inbound_forward'] = wp_unslash( $_POST['inbound_forward'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
+		}
+		if ( isset( $_POST['routing_rules'] ) && is_array( $_POST['routing_rules'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- per-rule sanitize in Options::sanitize().
+			$input['routing_rules'] = array_values( wp_unslash( $_POST['routing_rules'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		}
 
 		Options::update( $input );
-		$this->redirect( 'settings', 'saved' );
+
+		if ( ! empty( $input['inbound_enabled'] ) && '' === (string) Options::get( 'inbound_secret' ) ) {
+			\MailKite\Smtp\Inbound::rotate_secret();
+		}
+
+		$this->redirect( in_array( $tab, [ 'inbound', 'health' ], true ) ? $tab : 'settings', 'saved' );
+	}
+
+	/**
+	 * Rotate the inbound webhook secret (admin-post).
+	 */
+	public function handle_rotate_inbound(): void {
+		$this->guard( 'mailkite_smtp_rotate_inbound' );
+		\MailKite\Smtp\Inbound::rotate_secret();
+		$this->redirect( 'inbound', 'saved' );
+	}
+
+	/**
+	 * Run the DNS health check on demand (admin-post).
+	 */
+	public function handle_health_check(): void {
+		$this->guard( 'mailkite_smtp_health_check' );
+		update_option( 'mailkite_smtp_health', \MailKite\Smtp\Health::check(), false );
+		$this->redirect( 'health', 'saved' );
+	}
+
+	/**
+	 * Download settings as JSON, secrets excluded (admin-post).
+	 */
+	public function handle_export_settings(): void {
+		$this->guard( 'mailkite_smtp_export_settings' );
+
+		$settings = Options::all();
+		unset( $settings['api_key'], $settings['smtp_password'], $settings['sendgrid_key'], $settings['brevo_key'], $settings['mailgun_key'], $settings['inbound_secret'] );
+
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=mailkite-smtp-settings.json' );
+		echo wp_json_encode( $settings, JSON_PRETTY_PRINT ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON download.
+		exit;
+	}
+
+	/**
+	 * Import settings from pasted JSON (admin-post).
+	 */
+	public function handle_import_settings(): void {
+		$this->guard( 'mailkite_smtp_import_settings' );
+
+		$json = isset( $_POST['settings_json'] ) ? wp_unslash( $_POST['settings_json'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- parsed as JSON, sanitized in Options::sanitize().
+		$data = json_decode( (string) $json, true );
+		if ( is_array( $data ) ) {
+			unset( $data['api_key'], $data['smtp_password'], $data['sendgrid_key'], $data['brevo_key'], $data['mailgun_key'], $data['inbound_secret'] );
+			Options::update( $data );
+			$this->redirect( 'settings', 'saved' );
+		}
+		$this->redirect( 'settings', 'import_failed' );
 	}
 
 	/**
@@ -206,7 +292,16 @@ final class Menu {
 	 * @return never
 	 */
 	private function redirect( string $tab, string $notice ): void {
-		wp_safe_redirect( add_query_arg( [ 'page' => self::SLUG, 'tab' => $tab, 'notice' => $notice ], admin_url( 'admin.php' ) ) );
+		wp_safe_redirect(
+			add_query_arg(
+				[
+					'page'   => self::SLUG,
+					'tab'    => $tab,
+					'notice' => $notice,
+				],
+				admin_url( 'admin.php' )
+			)
+		);
 		exit;
 	}
 
@@ -220,12 +315,22 @@ final class Menu {
 			'settings' => __( 'Settings', 'mailkite-smtp' ),
 			'log'      => __( 'Email Log', 'mailkite-smtp' ),
 			'test'     => __( 'Send Test', 'mailkite-smtp' ),
+			'inbound'  => __( 'Inbound', 'mailkite-smtp' ),
+			'health'   => __( 'Domain Health', 'mailkite-smtp' ),
 		];
 		echo '<nav class="nav-tab-wrapper">';
 		foreach ( $tabs as $key => $label ) {
 			printf(
 				'<a href="%s" class="nav-tab%s">%s</a>',
-				esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => $key ], admin_url( 'admin.php' ) ) ),
+				esc_url(
+					add_query_arg(
+						[
+							'page' => self::SLUG,
+							'tab'  => $key,
+						],
+						admin_url( 'admin.php' )
+					)
+				),
 				$key === $active ? ' nav-tab-active' : '',
 				esc_html( $label )
 			);
@@ -300,6 +405,12 @@ final class Menu {
 						<label><input type="radio" name="mailer" value="mailkite" <?php checked( $mailer, 'mailkite' ); ?> />
 							<strong><?php esc_html_e( 'MailKite (recommended)', 'mailkite-smtp' ); ?></strong>
 							— <?php esc_html_e( 'free tier, 2-minute setup, inbound email included', 'mailkite-smtp' ); ?></label><br/>
+						<label><input type="radio" name="mailer" value="sendgrid" <?php checked( $mailer, 'sendgrid' ); ?> />
+							<?php esc_html_e( 'SendGrid (your API key)', 'mailkite-smtp' ); ?></label><br/>
+						<label><input type="radio" name="mailer" value="brevo" <?php checked( $mailer, 'brevo' ); ?> />
+							<?php esc_html_e( 'Brevo (your API key)', 'mailkite-smtp' ); ?></label><br/>
+						<label><input type="radio" name="mailer" value="mailgun" <?php checked( $mailer, 'mailgun' ); ?> />
+							<?php esc_html_e( 'Mailgun (your API key)', 'mailkite-smtp' ); ?></label><br/>
 						<label><input type="radio" name="mailer" value="smtp" <?php checked( $mailer, 'smtp' ); ?> />
 							<?php esc_html_e( 'Other SMTP server (bring your own credentials)', 'mailkite-smtp' ); ?></label><br/>
 						<label><input type="radio" name="mailer" value="php" <?php checked( $mailer, 'php' ); ?> />
@@ -331,6 +442,73 @@ final class Menu {
 						<?php endif; ?>
 					</td>
 				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Tracking', 'mailkite-smtp' ); ?></th>
+					<td>
+						<?php
+						$track_options = [
+							'default' => __( 'Domain default', 'mailkite-smtp' ),
+							'on'      => __( 'On', 'mailkite-smtp' ),
+							'off'     => __( 'Off', 'mailkite-smtp' ),
+						];
+						foreach ( [
+							'track_opens'  => __( 'Opens', 'mailkite-smtp' ),
+							'track_clicks' => __( 'Clicks', 'mailkite-smtp' ),
+						] as $field => $label ) :
+							?>
+							<label style="margin-right:1.5em"><?php echo esc_html( $label ); ?>
+								<select name="<?php echo esc_attr( $field ); ?>">
+									<?php foreach ( $track_options as $value => $text ) : ?>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $s[ $field ], $value ); ?>><?php echo esc_html( $text ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+						<?php endforeach; ?>
+					</td>
+				</tr>
+			</table>
+			</div>
+
+			<div data-mk-section="sendgrid">
+			<h2>SendGrid</h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="mk-sg-key"><?php esc_html_e( 'API key', 'mailkite-smtp' ); ?></label></th>
+					<td><input type="password" class="regular-text" id="mk-sg-key" name="sendgrid_key" value="" autocomplete="new-password"
+						placeholder="<?php echo esc_attr( '' !== (string) $s['sendgrid_key'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : 'SG.' ); ?>" /></td>
+				</tr>
+			</table>
+			</div>
+
+			<div data-mk-section="brevo">
+			<h2>Brevo</h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="mk-brevo-key"><?php esc_html_e( 'API key', 'mailkite-smtp' ); ?></label></th>
+					<td><input type="password" class="regular-text" id="mk-brevo-key" name="brevo_key" value="" autocomplete="new-password"
+						placeholder="<?php echo esc_attr( '' !== (string) $s['brevo_key'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : 'xkeysib-' ); ?>" /></td>
+				</tr>
+			</table>
+			</div>
+
+			<div data-mk-section="mailgun">
+			<h2>Mailgun</h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="mk-mg-key"><?php esc_html_e( 'API key', 'mailkite-smtp' ); ?></label></th>
+					<td><input type="password" class="regular-text" id="mk-mg-key" name="mailgun_key" value="" autocomplete="new-password"
+						placeholder="<?php echo esc_attr( '' !== (string) $s['mailgun_key'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : '' ); ?>" /></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="mk-mg-domain"><?php esc_html_e( 'Sending domain', 'mailkite-smtp' ); ?></label></th>
+					<td>
+						<input type="text" class="regular-text" id="mk-mg-domain" name="mailgun_domain" value="<?php echo esc_attr( (string) $s['mailgun_domain'] ); ?>" placeholder="mg.example.com" />
+						<select name="mailgun_region">
+							<option value="us" <?php selected( $s['mailgun_region'], 'us' ); ?>>US</option>
+							<option value="eu" <?php selected( $s['mailgun_region'], 'eu' ); ?>>EU</option>
+						</select>
+					</td>
+				</tr>
 			</table>
 			</div>
 
@@ -349,7 +527,13 @@ final class Menu {
 					<th scope="row"><?php esc_html_e( 'Encryption', 'mailkite-smtp' ); ?></th>
 					<td>
 						<select name="smtp_encryption">
-							<?php foreach ( [ 'tls' => 'TLS (STARTTLS)', 'ssl' => 'SSL', 'none' => __( 'None', 'mailkite-smtp' ) ] as $value => $label ) : ?>
+							<?php
+							foreach ( [
+								'tls'  => 'TLS (STARTTLS)',
+								'ssl'  => 'SSL',
+								'none' => __( 'None', 'mailkite-smtp' ),
+							] as $value => $label ) :
+								?>
 								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $s['smtp_encryption'], $value ); ?>><?php echo esc_html( $label ); ?></option>
 							<?php endforeach; ?>
 						</select>
@@ -413,9 +597,74 @@ final class Menu {
 						<input type="email" class="regular-text" name="alert_email" value="<?php echo esc_attr( (string) $s['alert_email'] ); ?>"
 							placeholder="<?php echo esc_attr( (string) get_option( 'admin_email' ) ); ?>" style="margin-top:6px" />
 						<p class="description"><?php esc_html_e( 'Leave empty to use the site admin email.', 'mailkite-smtp' ); ?></p>
+						<input type="url" class="regular-text" name="alert_webhook" value="<?php echo esc_attr( (string) $s['alert_webhook'] ); ?>"
+							placeholder="https://hooks.slack.com/services/…" style="margin-top:6px" />
+						<p class="description"><?php esc_html_e( 'Optional: also POST alerts to a Slack, Discord, or generic webhook URL.', 'mailkite-smtp' ); ?></p>
 					</td>
 				</tr>
 			</table>
+
+			<h2><?php esc_html_e( 'Routing rules', 'mailkite-smtp' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'Send matching emails through a different mailer — e.g. WooCommerce receipts via MailKite, everything with "Newsletter" in the subject via your own SES SMTP. First matching rule wins.', 'mailkite-smtp' ); ?></p>
+			<table class="widefat striped" style="max-width:760px" id="mk-rules">
+				<thead><tr>
+					<th><?php esc_html_e( 'When', 'mailkite-smtp' ); ?></th>
+					<th><?php esc_html_e( 'contains', 'mailkite-smtp' ); ?></th>
+					<th><?php esc_html_e( 'send via', 'mailkite-smtp' ); ?></th>
+					<th></th>
+				</tr></thead>
+				<tbody>
+				<?php
+				$rules   = (array) $s['routing_rules'];
+				$rules[] = [
+					'field'  => 'subject',
+					'match'  => '',
+					'mailer' => 'mailkite',
+				]; // One blank row to fill in.
+				foreach ( $rules as $i => $rule ) :
+					?>
+					<tr>
+						<td>
+							<select name="routing_rules[<?php echo (int) $i; ?>][field]">
+								<option value="subject" <?php selected( $rule['field'], 'subject' ); ?>><?php esc_html_e( 'Subject', 'mailkite-smtp' ); ?></option>
+								<option value="to" <?php selected( $rule['field'], 'to' ); ?>><?php esc_html_e( 'Recipient', 'mailkite-smtp' ); ?></option>
+							</select>
+						</td>
+						<td><input type="text" name="routing_rules[<?php echo (int) $i; ?>][match]" value="<?php echo esc_attr( (string) $rule['match'] ); ?>" /></td>
+						<td>
+							<select name="routing_rules[<?php echo (int) $i; ?>][mailer]">
+								<?php foreach ( \MailKite\Smtp\Options::MAILERS as $m ) : ?>
+									<option value="<?php echo esc_attr( $m ); ?>" <?php selected( $rule['mailer'], $m ); ?>><?php echo esc_html( $m ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</td>
+						<td><button type="button" class="button-link-delete mk-rule-del" aria-label="<?php esc_attr_e( 'Remove rule', 'mailkite-smtp' ); ?>">×</button></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			<p><button type="button" class="button" id="mk-rule-add"><?php esc_html_e( 'Add rule', 'mailkite-smtp' ); ?></button>
+			<span class="description"><?php esc_html_e( 'Rules with an empty "contains" are ignored.', 'mailkite-smtp' ); ?></span></p>
+			<script>
+			( function () {
+				document.getElementById( 'mk-rule-add' ).addEventListener( 'click', function () {
+					var tbody = document.querySelector( '#mk-rules tbody' );
+					var row   = tbody.rows[ tbody.rows.length - 1 ].cloneNode( true );
+					var index = tbody.rows.length;
+					row.querySelectorAll( 'select,input' ).forEach( function ( el ) {
+						el.name = el.name.replace( /\[\d+\]/, '[' + index + ']' );
+						if ( 'text' === el.type ) { el.value = ''; }
+					} );
+					tbody.appendChild( row );
+				} );
+				document.getElementById( 'mk-rules' ).addEventListener( 'click', function ( e ) {
+					if ( e.target.classList.contains( 'mk-rule-del' ) ) {
+						var tbody = document.querySelector( '#mk-rules tbody' );
+						if ( tbody.rows.length > 1 ) { e.target.closest( 'tr' ).remove(); } else { e.target.closest( 'tr' ).querySelector( 'input[type=text]' ).value = ''; }
+					}
+				} );
+			} )();
+			</script>
 
 			<h2><?php esc_html_e( 'Email log', 'mailkite-smtp' ); ?></h2>
 			<table class="form-table" role="presentation">
@@ -437,6 +686,127 @@ final class Menu {
 
 			<?php submit_button( __( 'Save Settings', 'mailkite-smtp' ) ); ?>
 		</form>
+
+		<hr/>
+		<h2><?php esc_html_e( 'Backup & migrate', 'mailkite-smtp' ); ?></h2>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:1em">
+			<input type="hidden" name="action" value="mailkite_smtp_export_settings" />
+			<?php wp_nonce_field( 'mailkite_smtp_export_settings' ); ?>
+			<button type="submit" class="button"><?php esc_html_e( 'Export settings (JSON, no secrets)', 'mailkite-smtp' ); ?></button>
+		</form>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block">
+			<input type="hidden" name="action" value="mailkite_smtp_import_settings" />
+			<?php wp_nonce_field( 'mailkite_smtp_import_settings' ); ?>
+			<input type="text" name="settings_json" class="regular-text" placeholder='{"mailer":"mailkite", …}' />
+			<button type="submit" class="button"><?php esc_html_e( 'Import JSON', 'mailkite-smtp' ); ?></button>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Inbound tab: webhook URL, secret rotation, forwarding, developer hook docs.
+	 */
+	private function render_inbound(): void {
+		$s   = Options::all();
+		$url = \MailKite\Smtp\Inbound::url();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
+			<input type="hidden" name="action" value="mailkite_smtp_save" />
+			<input type="hidden" name="_back_tab" value="inbound" />
+			<?php wp_nonce_field( 'mailkite_smtp_save' ); ?>
+			<p><?php esc_html_e( 'Receive email into WordPress: point a MailKite inbound route at this site and every message fires a hook your plugins can consume — and can be forwarded to an inbox.', 'mailkite-smtp' ); ?></p>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Inbound email', 'mailkite-smtp' ); ?></th>
+					<td><label><input type="checkbox" name="inbound_enabled" <?php checked( (bool) $s['inbound_enabled'] ); ?> /> <?php esc_html_e( 'Enable the inbound webhook endpoint', 'mailkite-smtp' ); ?></label></td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Webhook URL', 'mailkite-smtp' ); ?></th>
+					<td>
+						<?php if ( $url ) : ?>
+							<code style="user-select:all"><?php echo esc_html( $url ); ?></code>
+							<p class="description"><?php esc_html_e( 'Paste this as the webhook for your domain in the MailKite dashboard (Domains → Webhook).', 'mailkite-smtp' ); ?></p>
+						<?php else : ?>
+							<em><?php esc_html_e( 'Enable inbound and save — a secret URL will be generated.', 'mailkite-smtp' ); ?></em>
+						<?php endif; ?>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="mk-inb-fwd"><?php esc_html_e( 'Forward a copy to', 'mailkite-smtp' ); ?></label></th>
+					<td><input type="email" class="regular-text" id="mk-inb-fwd" name="inbound_forward" value="<?php echo esc_attr( (string) $s['inbound_forward'] ); ?>" />
+					<p class="description"><?php esc_html_e( 'Optional. Each inbound email is also sent to this address.', 'mailkite-smtp' ); ?></p></td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Save Inbound Settings', 'mailkite-smtp' ) ); ?>
+		</form>
+		<?php if ( $url ) : ?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="mailkite_smtp_rotate_inbound" />
+				<?php wp_nonce_field( 'mailkite_smtp_rotate_inbound' ); ?>
+				<button type="submit" class="button"><?php esc_html_e( 'Rotate secret URL', 'mailkite-smtp' ); ?></button>
+			</form>
+		<?php endif; ?>
+		<h2><?php esc_html_e( 'For developers', 'mailkite-smtp' ); ?></h2>
+		<pre style="background:#f6f7f7;padding:12px;max-width:760px;overflow:auto">add_action( 'mailkite_smtp_inbound', function ( array $message, array $payload ) {
+	// $message: from, to, subject, text, html, attachments …
+	error_log( 'Email from ' . $message['from'] . ': ' . $message['subject'] );
+}, 10, 2 );</pre>
+		<?php
+	}
+
+	/**
+	 * Domain Health tab: SPF/DMARC cards + on-demand re-check.
+	 */
+	private function render_health(): void {
+		$health = \MailKite\Smtp\Health::latest();
+		?>
+		<h2>
+			<?php
+			/* translators: %s: sending domain. */
+			printf( esc_html__( 'DNS for %s', 'mailkite-smtp' ), esc_html( $health['domain'] ) );
+			?>
+		</h2>
+		<table class="widefat striped" style="max-width:640px">
+			<tbody>
+				<?php
+				foreach ( [
+					'spf'   => 'SPF',
+					'dmarc' => 'DMARC',
+				] as $key => $label ) :
+					$ok = ! empty( $health[ $key ] );
+					?>
+					<tr>
+						<td><strong><?php echo esc_html( $label ); ?></strong></td>
+						<td>
+							<?php if ( $ok ) : ?>
+								<span style="color:#00a32a">✓ <?php esc_html_e( 'record found', 'mailkite-smtp' ); ?></span>
+							<?php else : ?>
+								<span style="color:#b32d2e">✗ <?php esc_html_e( 'missing — emails may land in spam', 'mailkite-smtp' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+				<tr>
+					<td><?php esc_html_e( 'Last checked (UTC)', 'mailkite-smtp' ); ?></td>
+					<td><?php echo esc_html( $health['checked_at'] ); ?></td>
+				</tr>
+			</tbody>
+		</table>
+		<p class="description" style="margin-top:8px"><?php esc_html_e( 'Re-checked automatically every week; you get an email alert if a record that used to exist disappears. DKIM is verified by your provider (MailKite shows it under Domains).', 'mailkite-smtp' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="mailkite_smtp_health_check" />
+			<?php wp_nonce_field( 'mailkite_smtp_health_check' ); ?>
+			<button type="submit" class="button"><?php esc_html_e( 'Re-check now', 'mailkite-smtp' ); ?></button>
+		</form>
+		<h2 style="margin-top:1.5em"><?php esc_html_e( 'Weekly summary', 'mailkite-smtp' ); ?></h2>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="mailkite_smtp_save" />
+			<input type="hidden" name="_back_tab" value="health" />
+			<?php wp_nonce_field( 'mailkite_smtp_save' ); ?>
+			<label><input type="checkbox" name="summary_enabled" <?php checked( (bool) Options::get( 'summary_enabled' ) ); ?> />
+			<?php esc_html_e( 'Email me a weekly delivery summary (sent/failed counts, top errors, DNS status)', 'mailkite-smtp' ); ?></label>
+			<?php submit_button( __( 'Save', 'mailkite-smtp' ) ); ?>
+		</form>
 		<?php
 	}
 
@@ -453,7 +823,6 @@ final class Menu {
 			<?php wp_nonce_field( 'mailkite_smtp_export' ); ?>
 			<button type="submit" class="button"><?php esc_html_e( 'Export CSV', 'mailkite-smtp' ); ?></button>
 		</form>
-		<?php ?>
 		<table class="widefat striped" style="margin-top:1em">
 			<thead><tr>
 				<th><?php esc_html_e( 'Date (UTC)', 'mailkite-smtp' ); ?></th>
