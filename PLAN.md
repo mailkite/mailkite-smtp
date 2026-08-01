@@ -122,7 +122,6 @@ Verified against FluentSMTP, WP Mail SMTP, and Post SMTP source:
 - [ ] Instant failure alerts: email/Slack/Discord/Telegram (instant by default)
 - [ ] Inbound tab: routes UI + `do_action('mailkite_inbound', $message)` + docs
 - [ ] Domain health weekly re-check + drift alert
-- [ ] WP-CLI: `wp mailkite test|log list|connect` (category gap)
 - [ ] Weekly summary email
 
 ### Phase 6 — P2 / scale & host deals

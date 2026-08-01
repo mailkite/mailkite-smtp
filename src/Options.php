@@ -32,6 +32,9 @@ final class Options {
 		'log_enabled'      => true,
 		'log_redact_auth'  => true,
 		'log_retention'    => 30,
+		'fallback_enabled' => true,
+		'alerts_enabled'   => false,
+		'alert_email'      => '',
 	];
 
 	/**
@@ -107,7 +110,7 @@ final class Options {
 		if ( isset( $input['api_base'] ) ) {
 			$clean['api_base'] = esc_url_raw( untrailingslashit( (string) $input['api_base'] ) );
 		}
-		foreach ( [ 'force_from_email' ] as $key ) {
+		foreach ( [ 'force_from_email', 'alert_email' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = sanitize_email( (string) $input[ $key ] );
 			}
@@ -121,7 +124,7 @@ final class Options {
 		if ( isset( $input['smtp_encryption'] ) && in_array( $input['smtp_encryption'], [ 'none', 'ssl', 'tls' ], true ) ) {
 			$clean['smtp_encryption'] = $input['smtp_encryption'];
 		}
-		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth' ] as $key ) {
+		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = rest_sanitize_boolean( $input[ $key ] );
 			}

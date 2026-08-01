@@ -26,6 +26,9 @@ final class Logger {
 	/** @var int|null Row id of the in-flight email. */
 	private ?int $current_id = null;
 
+	/** @var string Fallback note for the in-flight email, prepended to a final error. */
+	private string $fallback_note = '';
+
 	/**
 	 * Singleton accessor (hook callbacks need one shared in-flight row id).
 	 */
@@ -40,7 +43,8 @@ final class Logger {
 	 * @return array<string, mixed>
 	 */
 	public function capture( array $args ): array {
-		$this->current_id = null;
+		$this->current_id    = null;
+		$this->fallback_note = '';
 
 		if ( ! Options::get( 'log_enabled' ) ) {
 			return $args;
@@ -93,6 +97,28 @@ final class Logger {
 	}
 
 	/**
+	 * Record that the primary mailer failed and delivery is falling back,
+	 * without closing the in-flight row (the fallback path will).
+	 *
+	 * @param string $reason Primary-mailer error message.
+	 */
+	public function note_fallback( string $reason ): void {
+		if ( null === $this->current_id ) {
+			return;
+		}
+
+		$this->fallback_note = sprintf( 'MailKite failed (%s) — fell back to PHPMailer.', $reason );
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
+		$wpdb->update(
+			LogTable::name(),
+			[ 'error' => $this->fallback_note ],
+			[ 'id' => $this->current_id ]
+		);
+	}
+
+	/**
 	 * Mark the in-flight row with its outcome.
 	 *
 	 * @param string      $status sent|failed.
@@ -104,15 +130,15 @@ final class Logger {
 		}
 
 		global $wpdb;
+		$fields = [ 'status' => $status ];
+		if ( null !== $error ) {
+			$fields['error'] = '' !== $this->fallback_note ? $this->fallback_note . ' Then: ' . $error : $error;
+		}
+		$this->fallback_note = '';
+		// A null $error deliberately leaves any existing text (e.g. a fallback
+		// note) in place instead of wiping it.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom log table.
-		$wpdb->update(
-			LogTable::name(),
-			[
-				'status' => $status,
-				'error'  => $error,
-			],
-			[ 'id' => $this->current_id ]
-		);
+		$wpdb->update( LogTable::name(), $fields, [ 'id' => $this->current_id ] );
 		$this->current_id = null;
 	}
 

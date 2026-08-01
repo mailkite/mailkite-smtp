@@ -87,6 +87,7 @@ final class Menu {
 			'smtp_username',
 			'smtp_password',
 			'log_retention',
+			'alert_email',
 		];
 		$input  = [];
 		foreach ( $fields as $field ) {
@@ -99,7 +100,7 @@ final class Menu {
 			}
 			$input[ $field ] = wp_unslash( $_POST[ $field ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		}
-		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth' ] as $bool_field ) {
+		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ] as $bool_field ) {
 			$input[ $bool_field ] = isset( $_POST[ $bool_field ] );
 		}
 
@@ -392,6 +393,27 @@ final class Menu {
 				<tr>
 					<th scope="row"><label for="mk-from-name"><?php esc_html_e( 'Force from name', 'mailkite-smtp' ); ?></label></th>
 					<td><input type="text" class="regular-text" id="mk-from-name" name="force_from_name" value="<?php echo esc_attr( (string) $s['force_from_name'] ); ?>" /></td>
+				</tr>
+			</table>
+
+			<h2><?php esc_html_e( 'Reliability', 'mailkite-smtp' ); ?></h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Failover', 'mailkite-smtp' ); ?></th>
+					<td>
+						<label><input type="checkbox" name="fallback_enabled" <?php checked( (bool) $s['fallback_enabled'] ); ?> />
+						<?php esc_html_e( 'If MailKite fails, automatically retry via your SMTP server (or PHP mail) so the email still goes out', 'mailkite-smtp' ); ?></label>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Failure alerts', 'mailkite-smtp' ); ?></th>
+					<td>
+						<label><input type="checkbox" name="alerts_enabled" <?php checked( (bool) $s['alerts_enabled'] ); ?> />
+						<?php esc_html_e( 'Email me immediately when a send fails (max one alert per error per 15 minutes)', 'mailkite-smtp' ); ?></label><br/>
+						<input type="email" class="regular-text" name="alert_email" value="<?php echo esc_attr( (string) $s['alert_email'] ); ?>"
+							placeholder="<?php echo esc_attr( (string) get_option( 'admin_email' ) ); ?>" style="margin-top:6px" />
+						<p class="description"><?php esc_html_e( 'Leave empty to use the site admin email.', 'mailkite-smtp' ); ?></p>
+					</td>
 				</tr>
 			</table>
 

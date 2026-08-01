@@ -24,11 +24,12 @@ final class SmtpMailer {
 	 * @param \PHPMailer\PHPMailer\PHPMailer $phpmailer Core PHPMailer instance (by reference).
 	 */
 	public function configure( $phpmailer ): void {
-		if ( 'smtp' !== Options::get( 'mailer' ) ) {
+		$settings = Options::all();
+
+		$is_fallback = \MailKite\Smtp\Mail\Interceptor::$falling_back && '' !== (string) $settings['smtp_host'];
+		if ( 'smtp' !== $settings['mailer'] && ! $is_fallback ) {
 			return;
 		}
-
-		$settings = Options::all();
 
 		$phpmailer->isSMTP();
 		$phpmailer->Host = (string) $settings['smtp_host']; // phpcs:ignore WordPress.NamingConventions.ValidVariableName -- PHPMailer API.

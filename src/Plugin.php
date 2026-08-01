@@ -29,6 +29,11 @@ final class Plugin {
 		add_filter( 'wp_mail', [ $logger, 'capture' ], PHP_INT_MAX );
 		add_action( 'wp_mail_succeeded', [ $logger, 'on_succeeded' ] );
 		add_action( 'wp_mail_failed', [ $logger, 'on_failed' ] );
+		add_action( 'wp_mail_failed', [ new Alerts(), 'on_failed' ], 20 );
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			\WP_CLI::add_command( 'mailkite', Cli\Commands::class );
+		}
 
 		if ( is_admin() ) {
 			( new Admin\Menu() )->register();

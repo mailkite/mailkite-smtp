@@ -24,6 +24,12 @@ defined( 'ABSPATH' ) || exit;
 final class Interceptor {
 
 	/**
+	 * True while a failed MailKite send is being retried through PHPMailer,
+	 * so SmtpMailer knows to configure SMTP transport for this request.
+	 */
+	public static bool $falling_back = false;
+
+	/**
 	 * pre_wp_mail filter callback.
 	 *
 	 * @param bool|null                                                                       $short_circuit Existing short-circuit value.
@@ -31,6 +37,8 @@ final class Interceptor {
 	 * @return bool|null Null to let core send; bool result when handled here.
 	 */
 	public function maybe_send( $short_circuit, array $atts ) {
+		self::$falling_back = false; // Each email decides fresh.
+
 		if ( null !== $short_circuit ) {
 			return $short_circuit; // Another plugin got here first; respect it.
 		}
@@ -50,6 +58,16 @@ final class Interceptor {
 		];
 
 		if ( is_wp_error( $result ) ) {
+			if ( Options::get( 'fallback_enabled' ) ) {
+				// Let core deliver via PHPMailer instead: SMTP when configured, PHP
+				// mail() otherwise. The pending log row keeps its outcome from the
+				// wp_mail_succeeded / wp_mail_failed the core path fires.
+				\MailKite\Smtp\Log\Logger::instance()->note_fallback( $result->get_error_message() );
+				self::$falling_back = true;
+
+				return null;
+			}
+
 			$error = new WP_Error( 'wp_mail_failed', $result->get_error_message(), $mail_data );
 			do_action( 'wp_mail_failed', $error );
 
