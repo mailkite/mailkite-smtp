@@ -28,6 +28,8 @@ final class Menu {
 		add_action( 'admin_post_mailkite_smtp_save', [ $this, 'handle_save' ] );
 		add_action( 'admin_post_mailkite_smtp_test', [ $this, 'handle_test' ] );
 		add_action( 'admin_post_mailkite_smtp_resend', [ $this, 'handle_resend' ] );
+		add_action( 'admin_post_mailkite_smtp_import', [ $this, 'handle_import' ] );
+		add_action( 'admin_post_mailkite_smtp_export', [ $this, 'handle_export' ] );
 	}
 
 	/**
@@ -84,6 +86,7 @@ final class Menu {
 			'smtp_encryption',
 			'smtp_username',
 			'smtp_password',
+			'log_retention',
 		];
 		$input  = [];
 		foreach ( $fields as $field ) {
@@ -127,6 +130,40 @@ final class Menu {
 		);
 
 		$this->redirect( 'test', $sent ? 'test_sent' : 'test_failed' );
+	}
+
+	/**
+	 * Import settings from another SMTP plugin (admin-post).
+	 */
+	public function handle_import(): void {
+		$this->guard( 'mailkite_smtp_import' );
+
+		$source = isset( $_POST['source'] ) ? sanitize_key( wp_unslash( $_POST['source'] ) ) : '';
+		$done   = $source && \MailKite\Smtp\Migrate\Importer::import( $source );
+
+		$this->redirect( 'settings', $done ? 'imported' : 'import_failed' );
+	}
+
+	/**
+	 * Export the email log as CSV (admin-post).
+	 */
+	public function handle_export(): void {
+		$this->guard( 'mailkite_smtp_export' );
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin export.
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT created_at, mail_to, subject, mailer, status, error, redacted FROM %i ORDER BY id DESC', LogTable::name() ), ARRAY_A );
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename=mailkite-smtp-log-' . gmdate( 'Ymd-His' ) . '.csv' );
+
+		$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- streaming CSV response.
+		fputcsv( $out, [ 'created_at_utc', 'to', 'subject', 'mailer', 'status', 'error', 'redacted' ] );
+		foreach ( (array) $rows as $row ) {
+			fputcsv( $out, array_values( $row ) );
+		}
+		exit;
 	}
 
 	/**
@@ -205,6 +242,8 @@ final class Menu {
 		}
 		$map = [
 			'saved'         => [ 'success', __( 'Settings saved.', 'mailkite-smtp' ) ],
+			'imported'      => [ 'success', __( 'Settings imported — review below, then send a test email.', 'mailkite-smtp' ) ],
+			'import_failed' => [ 'error', __( 'Nothing importable found (only generic-SMTP configurations can be imported).', 'mailkite-smtp' ) ],
 			'test_sent'     => [ 'success', __( 'Test email sent — check the inbox (and the Email Log tab).', 'mailkite-smtp' ) ],
 			'test_failed'   => [ 'error', __( 'Test email failed — see the Email Log tab for the error.', 'mailkite-smtp' ) ],
 			'test_invalid'  => [ 'error', __( 'Enter a valid recipient address.', 'mailkite-smtp' ) ],
@@ -224,6 +263,29 @@ final class Menu {
 		$mailer     = (string) $s['mailer'];
 		$key_set    = '' !== (string) $s['api_key'];
 		$key_locked = defined( 'MAILKITE_API_KEY' ) && MAILKITE_API_KEY;
+
+		$detected = \MailKite\Smtp\Migrate\Importer::detect();
+		if ( $detected && 'php' === $mailer ) :
+			?>
+			<div class="notice notice-info" style="padding:12px">
+				<p style="margin-top:0"><strong><?php esc_html_e( 'Import your existing SMTP settings', 'mailkite-smtp' ); ?></strong> —
+				<?php esc_html_e( 'we found a configuration from another SMTP plugin on this site. Import it with one click (the original plugin is not modified):', 'mailkite-smtp' ); ?></p>
+				<?php foreach ( $detected as $slug => $label ) : ?>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:8px">
+						<input type="hidden" name="action" value="mailkite_smtp_import" />
+						<input type="hidden" name="source" value="<?php echo esc_attr( $slug ); ?>" />
+						<?php wp_nonce_field( 'mailkite_smtp_import' ); ?>
+						<button type="submit" class="button">
+							<?php
+							/* translators: %s: source plugin name. */
+							printf( esc_html__( 'Import from %s', 'mailkite-smtp' ), esc_html( $label ) );
+							?>
+						</button>
+					</form>
+				<?php endforeach; ?>
+			</div>
+			<?php
+		endif;
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="mailkite_smtp_save" />
@@ -245,6 +307,7 @@ final class Menu {
 				</tr>
 			</table>
 
+			<div data-mk-section="mailkite">
 			<h2><?php esc_html_e( 'MailKite', 'mailkite-smtp' ); ?></h2>
 			<table class="form-table" role="presentation">
 				<tr>
@@ -260,7 +323,7 @@ final class Menu {
 								printf(
 									/* translators: %s: link to MailKite dashboard. */
 									esc_html__( 'No account yet? Create one free at %s — a guided in-admin setup is coming in the next release.', 'mailkite-smtp' ),
-									'<a href="https://app.mailkite.dev/signup?ref=wp-plugin" target="_blank" rel="noopener">app.mailkite.dev</a>'
+									'<a href="https://app.mailkite.dev/?utm_source=wp-plugin&amp;utm_medium=plugin" target="_blank" rel="noopener">app.mailkite.dev</a>'
 								);
 								?>
 							</p>
@@ -268,7 +331,9 @@ final class Menu {
 					</td>
 				</tr>
 			</table>
+			</div>
 
+			<div data-mk-section="smtp">
 			<h2><?php esc_html_e( 'SMTP server', 'mailkite-smtp' ); ?></h2>
 			<table class="form-table" role="presentation">
 				<tr>
@@ -300,6 +365,22 @@ final class Menu {
 						placeholder="<?php echo esc_attr( '' !== (string) $s['smtp_password'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : '' ); ?>" /></td>
 				</tr>
 			</table>
+			</div>
+
+			<script>
+			( function () {
+				var radios = document.querySelectorAll( 'input[name="mailer"]' );
+				function sync() {
+					var picked = document.querySelector( 'input[name="mailer"]:checked' );
+					var mailer = picked ? picked.value : 'php';
+					document.querySelectorAll( '[data-mk-section]' ).forEach( function ( el ) {
+						el.style.display = el.getAttribute( 'data-mk-section' ) === mailer ? '' : 'none';
+					} );
+				}
+				radios.forEach( function ( r ) { r.addEventListener( 'change', sync ); } );
+				sync();
+			} )();
+			</script>
 
 			<h2><?php esc_html_e( 'From address', 'mailkite-smtp' ); ?></h2>
 			<table class="form-table" role="presentation">
@@ -323,6 +404,13 @@ final class Menu {
 						<label><input type="checkbox" name="log_redact_auth" <?php checked( (bool) $s['log_redact_auth'] ); ?> /> <?php esc_html_e( 'Do not store bodies of password-reset and verification emails (recommended)', 'mailkite-smtp' ); ?></label>
 					</td>
 				</tr>
+				<tr>
+					<th scope="row"><label for="mk-retention"><?php esc_html_e( 'Keep logs for', 'mailkite-smtp' ); ?></label></th>
+					<td>
+						<input type="number" min="1" id="mk-retention" name="log_retention" value="<?php echo esc_attr( (string) $s['log_retention'] ); ?>" style="width:5em" />
+						<?php esc_html_e( 'days (older entries are purged daily)', 'mailkite-smtp' ); ?>
+					</td>
+				</tr>
 			</table>
 
 			<?php submit_button( __( 'Save Settings', 'mailkite-smtp' ) ); ?>
@@ -338,6 +426,12 @@ final class Menu {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
 		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id, created_at, mail_to, subject, mailer, status, error, redacted, body IS NULL AS no_body FROM %i ORDER BY id DESC LIMIT 100', LogTable::name() ) );
 		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
+			<input type="hidden" name="action" value="mailkite_smtp_export" />
+			<?php wp_nonce_field( 'mailkite_smtp_export' ); ?>
+			<button type="submit" class="button"><?php esc_html_e( 'Export CSV', 'mailkite-smtp' ); ?></button>
+		</form>
+		<?php ?>
 		<table class="widefat striped" style="margin-top:1em">
 			<thead><tr>
 				<th><?php esc_html_e( 'Date (UTC)', 'mailkite-smtp' ); ?></th>

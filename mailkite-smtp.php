@@ -39,5 +39,11 @@ spl_autoload_register(
 );
 
 register_activation_hook( __FILE__, [ Log\LogTable::class, 'install' ] );
+register_deactivation_hook(
+	__FILE__,
+	static function (): void {
+		wp_clear_scheduled_hook( 'mailkite_smtp_purge_logs' );
+	}
+);
 
 add_action( 'plugins_loaded', [ Plugin::class, 'boot' ] );

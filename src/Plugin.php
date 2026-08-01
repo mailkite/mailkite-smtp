@@ -34,5 +34,12 @@ final class Plugin {
 			( new Admin\Menu() )->register();
 		}
 		add_action( 'rest_api_init', [ new Admin\Rest(), 'register_routes' ] );
+
+		add_action( 'mailkite_smtp_purge_logs', static function (): void {
+			Log\LogTable::purge( (int) Options::get( 'log_retention' ) );
+		} );
+		if ( ! wp_next_scheduled( 'mailkite_smtp_purge_logs' ) ) {
+			wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', 'mailkite_smtp_purge_logs' );
+		}
 	}
 }

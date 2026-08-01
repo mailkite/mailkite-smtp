@@ -58,4 +58,21 @@ final class LogTable {
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION, false );
 	}
+
+	/**
+	 * Delete log rows older than the retention window (daily cron).
+	 *
+	 * @param int $days Retention in days.
+	 */
+	public static function purge( int $days ): void {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
+		$wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE created_at < %s',
+				self::name(),
+				gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS )
+			)
+		);
+	}
 }

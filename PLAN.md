@@ -42,8 +42,11 @@ Verified against FluentSMTP, WP Mail SMTP, and Post SMTP source:
 - [x] Repo init (`main`), GPLv2 LICENSE, .gitignore/.distignore/.editorconfig
 - [x] Plugin skeleton: header, PSR-4-style autoloader (no runtime composer deps)
 - [x] readme.txt (wp.org format) + README.md (GitHub)
-- [ ] QA tooling: PHPCS + WPCS 3.x, PHPStan lvl 6, Plugin Check (PCP) locally
-- [ ] GitHub repo public + CI (lint, stan, PCP on PR)
+- [x] QA tooling configured: PHPCS + WPCS 3.x (`phpcs.xml`), PHPStan lvl 6
+      (`phpstan.neon`), composer scripts (`composer lint` / `stan`)
+- [x] GitHub repo public (github.com/mailkite/mailkite-smtp) + CI workflow
+      (php -l matrix, PHPCS, PHPStan, official Plugin Check action)
+- [ ] Fix violations CI surfaces on first runs (PHPCS/PHPStan/PCP)
 
 ### Phase 1 — Core send path (P0)
 - [x] `Options` wrapper (sanitized, defaults, `MAILKITE_*` wp-config constant overrides)
@@ -63,23 +66,32 @@ Verified against FluentSMTP, WP Mail SMTP, and Post SMTP source:
 - [x] Redaction default-on: auth-pattern subjects store headers only, no body
 - [x] Log admin list: search, status filter, detail, delete; capability-gated
 - [x] Resend from log
-- [ ] Retention setting + daily cron purge
-- [ ] CSV export
+- [x] Retention setting + daily cron purge (unscheduled on deactivation)
+- [x] CSV export
 
 ### Phase 3 — Admin UI & wizard (P0 — the conversion surface)
-- [x] Minimal settings page (PHP form, nonce + caps) — functional MVP
+- [x] Minimal settings page (PHP form, nonce + caps) — functional MVP, with
+      mailer-choice section toggling (MailKite → key only; SMTP → server only;
+      PHP mail → neither)
+- [x] One-click settings migration importer (WP Mail SMTP incl. modern Easy WP SMTP,
+      legacy Easy WP SMTP, FluentSMTP, Post SMTP — generic-SMTP configs only;
+      detection banner on settings page)
 - [x] REST: `mailkite-smtp/v1` settings/test/logs endpoints (`permission_callback`)
 - [ ] `@wordpress/scripts` build; React page with `@wordpress/components`
 - [ ] Full-screen first-run wizard: provider picker (MailKite recommended card + BYO
       grid) → connect → domain/DNS → test → done
+- [ ] **Mint a real affiliate ref code for the plugin** — `ref` must be an 8-char
+      Crockford-base32 affiliate code (`dashboard/src/lib/ref.ts`); `?ref=wp-plugin` is
+      silently rejected. Until minted, links use plain UTM. Then embed
+      `app.mailkite.dev/?ref=<code>` in the settings page + wizard signup call.
 - [ ] **In-admin MailKite signup**: `POST /api/auth/signup` (+`ref` attribution) →
       verify → `POST /api/domains` → DNS records UI → `/api/domains/{id}/verify` poll
       → scoped key via `/api/keys/scoped` → test send  ⚠ needs `/api/keys*` +
       `/api/billing/usage` added to `sdks/spec/api.json` first
 - [ ] Dashboard: connection health, 24h sent/failed, quota bar (`/api/billing/usage`),
       SPF/DKIM/DMARC card
-- [ ] One-click settings migration importer (WP Mail SMTP, FluentSMTP, Post SMTP,
-      Easy WP SMTP)
+- [x] One-click settings migration importer — shipped in the PHP MVP; re-surface it
+      inside the React wizard when that lands
 
 ### Phase 4 — wp.org launch (M1/M2)
 - [ ] Plugin Check clean pass; readme short description ≤ 150 chars; screenshots

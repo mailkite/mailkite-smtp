@@ -1,0 +1,25 @@
+{
+	"name": "mailkite/mailkite-smtp",
+	"description": "WordPress SMTP plugin with free email logs, privacy-safe redaction, and inbound email.",
+	"license": "GPL-2.0-or-later",
+	"type": "wordpress-plugin",
+	"require": {
+		"php": ">=8.1"
+	},
+	"require-dev": {
+		"wp-coding-standards/wpcs": "^3.1",
+		"phpstan/phpstan": "^2.0",
+		"szepeviktor/phpstan-wordpress": "^2.0",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+	},
+	"scripts": {
+		"lint": "phpcs",
+		"lint:fix": "phpcbf",
+		"stan": "phpstan analyse"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+}

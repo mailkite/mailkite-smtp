@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: PHP syntax check
+        run: find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Install QA tools
+        run: composer install --no-interaction --no-progress
+      - name: PHPCS (WordPress Coding Standards)
+        run: composer lint
+      - name: PHPStan
+        run: composer stan
+
+  plugin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run WordPress Plugin Check
+        uses: wordpress/plugin-check-action@v1
+        with:
+          build-dir: '.'

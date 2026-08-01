@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<ruleset name="MailKite SMTP">
+	<description>WordPress Coding Standards for MailKite SMTP.</description>
+
+	<file>.</file>
+	<exclude-pattern>vendor/*</exclude-pattern>
+	<exclude-pattern>node_modules/*</exclude-pattern>
+	<exclude-pattern>build/*</exclude-pattern>
+
+	<arg value="ps"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="8"/>
+
+	<config name="minimum_wp_version" value="6.2"/>
+	<config name="testVersion" value="8.1-"/>
+
+	<rule ref="WordPress">
+		<!-- PSR-4 file naming (src/Plugin.php), not WP class-*.php convention. -->
+		<exclude name="WordPress.Files.FileName"/>
+		<!-- Short array syntax is used throughout. -->
+		<exclude name="Universal.Arrays.DisallowShortArraySyntax"/>
+	</rule>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="mailkite-smtp"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>
