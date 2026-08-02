@@ -85,6 +85,7 @@ final class Menu {
 		$this->guard( 'mailkite_smtp_save' );
 
 		$fields = [
+			'inbound_hmac_secret',
 			'mailer',
 			'api_key',
 			'force_from_email',
@@ -110,7 +111,7 @@ final class Menu {
 			if ( ! isset( $_POST[ $field ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
 				continue;
 			}
-			$blank_keeps_saved = in_array( $field, [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key' ], true );
+			$blank_keeps_saved = in_array( $field, [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_hmac_secret' ], true );
 			if ( $blank_keeps_saved && '' === $_POST[ $field ] ) {
 				continue; // Empty secret field means "keep the stored one".
 			}
@@ -169,7 +170,7 @@ final class Menu {
 		$this->guard( 'mailkite_smtp_export_settings' );
 
 		$settings = Options::all();
-		unset( $settings['api_key'], $settings['smtp_password'], $settings['sendgrid_key'], $settings['brevo_key'], $settings['mailgun_key'], $settings['inbound_secret'] );
+		unset( $settings['api_key'], $settings['smtp_password'], $settings['sendgrid_key'], $settings['brevo_key'], $settings['mailgun_key'], $settings['inbound_secret'], $settings['inbound_hmac_secret'] );
 
 		nocache_headers();
 		header( 'Content-Type: application/json; charset=utf-8' );
@@ -187,7 +188,7 @@ final class Menu {
 		$json = isset( $_POST['settings_json'] ) ? wp_unslash( $_POST['settings_json'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- parsed as JSON, sanitized in Options::sanitize().
 		$data = json_decode( (string) $json, true );
 		if ( is_array( $data ) ) {
-			unset( $data['api_key'], $data['smtp_password'], $data['sendgrid_key'], $data['brevo_key'], $data['mailgun_key'], $data['inbound_secret'] );
+			unset( $data['api_key'], $data['smtp_password'], $data['sendgrid_key'], $data['brevo_key'], $data['mailgun_key'], $data['inbound_secret'], $data['inbound_hmac_secret'] );
 			Options::update( $data );
 			$this->redirect( 'settings', 'saved' );
 		}
@@ -729,6 +730,14 @@ final class Menu {
 						<?php else : ?>
 							<em><?php esc_html_e( 'Enable inbound and save — a secret URL will be generated.', 'mailkite-smtp' ); ?></em>
 						<?php endif; ?>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="mk-inb-hmac"><?php esc_html_e( 'Signature secret', 'mailkite-smtp' ); ?></label></th>
+					<td>
+						<input type="password" class="regular-text" id="mk-inb-hmac" name="inbound_hmac_secret" value="" autocomplete="new-password"
+							placeholder="<?php echo esc_attr( '' !== (string) $s['inbound_hmac_secret'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : 'whsec_...' ); ?>" />
+						<p class="description"><?php esc_html_e( 'Recommended: paste your domain’s webhook signing secret (MailKite dashboard → Domains → Webhook secret). Deliveries are then verified with an HMAC signature and a 5-minute freshness window, on top of the secret URL.', 'mailkite-smtp' ); ?></p>
 					</td>
 				</tr>
 				<tr>

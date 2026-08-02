@@ -60,9 +60,10 @@ All phases built and verified on WordPress Playground except the items in
 ## Decisions taken (autonomous, revisit any time)
 - **D1** BYO API mailers = SendGrid, Brevo, Mailgun. Gmail/Workspace OAuth needs a
   Google Cloud OAuth app (human); SES-API needs SigV4 (SES works today via SMTP creds).
-- **D2** Inbound auth = per-site random token in URL, constant-time compare, rotation
-  button. Upgrade path: MailKite webhook HMAC signatures once the scheme is documented
-  in the SDK spec (`getWebhookSecret` exists).
+- **D2** Inbound auth = secret-URL token + **optional HMAC signature verification**
+  (shipped 2026-08-02): paste the domain's whsec_… secret and deliveries must carry
+  `x-mailkite-signature: t=<ms>,v1=<hex>` = HMAC-SHA256(secret, "t.body"), ±5 min
+  window, constant-time compare. Tested: valid 200 / missing / wrong / stale 403.
 - **D3** Admin UI stays native PHP (wizard-style sections + toggling). React
   `@wordpress/components` port remains a polish milestone, not a launch gate — every
   flow it would deliver already works.
@@ -79,9 +80,11 @@ All phases built and verified on WordPress Playground except the items in
       `wp mailkite` on a real wp-cli install — not launch gates
 - [x] **Affiliate ref code wired**: `xmbf3bd0` (Gabe's admin account) + `channel=wordpress-plugin`
       on the settings-page link; channel attribution deployed platform-wide 2026-08-02
-- [ ] **SDK spec additions** (api-ssot project): `/api/keys*`, `/api/billing/usage`,
-      webhook-signature scheme, suppressions endpoint (unblocks in-admin signup, quota
-      meter, D2, D5)
+- [x] **SDK spec additions** (done 2026-08-02, monorepo 18f9176): Account group
+      (`/api/keys`, rotate, scoped CRUD, `/api/billing/usage`) + Suppressions group
+      documented, 69/69 routes complete; webhook-HMAC scheme was already spec'd
+      (verifyWebhook). React wizard signup, quota meter, and suppression view are now
+      unblocked; plugin-side HMAC verify shipped (D2).
 - [ ] Gmail/Workspace OAuth app credentials (D1); screenshots from a real styled site
       if the generated ones aren't wanted
 - [ ] Decide: keep `.blueprint-dev.json` local-only or document in README (currently

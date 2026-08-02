@@ -46,6 +46,7 @@ final class Options {
 		'routing_rules'    => [], // [ [ 'field' => subject|to, 'match' => str, 'mailer' => id ], ... ].
 		'inbound_enabled'  => false,
 		'inbound_secret'   => '',
+		'inbound_hmac_secret' => '', // whsec_… from MailKite (Domains → Webhook secret); enables signature verification.
 		'inbound_forward'  => '',
 		'summary_enabled'  => false,
 	];
@@ -61,7 +62,7 @@ final class Options {
 		$stored   = get_option( self::OPTION, [] );
 		$settings = array_merge( self::DEFAULTS, is_array( $stored ) ? $stored : [] );
 
-		foreach ( [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret' ] as $secret ) {
+		foreach ( [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret', 'inbound_hmac_secret' ] as $secret ) {
 			$settings[ $secret ] = Crypto::decrypt( (string) $settings[ $secret ] );
 		}
 
@@ -117,7 +118,7 @@ final class Options {
 				$clean[ $key ] = sanitize_text_field( (string) $input[ $key ] );
 			}
 		}
-		foreach ( [ 'api_key', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret' ] as $key ) {
+		foreach ( [ 'api_key', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_secret', 'inbound_hmac_secret' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = Crypto::encrypt( sanitize_text_field( (string) $input[ $key ] ) );
 			}

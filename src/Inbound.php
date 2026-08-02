@@ -76,6 +76,15 @@ final class Inbound {
 			return new WP_Error( 'forbidden', 'Invalid token.', [ 'status' => 403 ] );
 		}
 
+		// When a signing secret is configured, additionally require MailKite's
+		// x-mailkite-signature header: `t=<ms>,v1=<hex>` where
+		// v1 = HMAC-SHA256(secret, "{t}.{raw body}"), fresh within ±5 minutes.
+		// (Scheme per the MailKite spec's verifyWebhook; constant-time compare.)
+		$hmac_secret = (string) Options::get( 'inbound_hmac_secret' );
+		if ( '' !== $hmac_secret && ! $this->valid_signature( $request, $hmac_secret ) ) {
+			return new WP_Error( 'bad_signature', 'Invalid or stale signature.', [ 'status' => 403 ] );
+		}
+
 		$payload = $request->get_json_params();
 		if ( ! is_array( $payload ) ) {
 			return new WP_Error( 'bad_request', 'Expected a JSON body.', [ 'status' => 400 ] );
@@ -126,5 +135,38 @@ final class Inbound {
 		}
 
 		return rest_ensure_response( [ 'ok' => true ] );
+	}
+
+	/**
+	 * Verify `x-mailkite-signature: t=<ms>,v1=<hex>` over the raw request body.
+	 *
+	 * @param WP_REST_Request $request Incoming webhook.
+	 * @param string          $secret  The whsec_… signing secret.
+	 */
+	private function valid_signature( WP_REST_Request $request, string $secret ): bool {
+		$header = (string) $request->get_header( 'x-mailkite-signature' );
+		if ( '' === $header ) {
+			return false;
+		}
+
+		$parts = [];
+		foreach ( explode( ',', $header ) as $pair ) {
+			$eq = strpos( $pair, '=' );
+			if ( false !== $eq ) {
+				$parts[ trim( substr( $pair, 0, $eq ) ) ] = trim( substr( $pair, $eq + 1 ) );
+			}
+		}
+		$timestamp = $parts['t'] ?? '';
+		$given     = $parts['v1'] ?? '';
+		if ( ! ctype_digit( $timestamp ) || '' === $given ) {
+			return false;
+		}
+		if ( abs( time() * 1000 - (int) $timestamp ) > 5 * MINUTE_IN_SECONDS * 1000 ) {
+			return false; // Stale or replayed.
+		}
+
+		$expected = hash_hmac( 'sha256', $timestamp . '.' . $request->get_body(), $secret );
+
+		return hash_equals( $expected, strtolower( $given ) );
 	}
 }
