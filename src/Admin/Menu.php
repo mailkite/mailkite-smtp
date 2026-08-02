@@ -349,6 +349,13 @@ final class Menu {
 		}
 		$map = [
 			'saved'         => [ 'success', __( 'Settings saved.', 'mailkite-smtp' ) ],
+			'provisioned'   => [ 'success', __( 'MailKite account created and connected! Check your inbox and click the verification link — sending stays blocked until the email is verified.', 'mailkite-smtp' ) ],
+			'connected'     => [ 'success', __( 'MailKite account connected.', 'mailkite-smtp' ) ],
+			'account_exists' => [ 'error', __( 'That email already has a MailKite account — use "Connect existing account" below, or paste its API key.', 'mailkite-smtp' ) ],
+			'provision_invalid' => [ 'error', __( 'Enter a valid email address.', 'mailkite-smtp' ) ],
+			'provision_failed' => [ 'error', __( 'Could not create the account — try again in a minute.', 'mailkite-smtp' ) ],
+			'rate_limited'  => [ 'error', __( 'Too many attempts — try again later.', 'mailkite-smtp' ) ],
+			'oauth_failed'  => [ 'error', __( 'Connecting to MailKite failed — try again, or paste an API key instead.', 'mailkite-smtp' ) ],
 			'imported'      => [ 'success', __( 'Settings imported — review below, then send a test email.', 'mailkite-smtp' ) ],
 			'import_failed' => [ 'error', __( 'Nothing importable found (only generic-SMTP configurations can be imported).', 'mailkite-smtp' ) ],
 			'test_sent'     => [ 'success', __( 'Test email sent — check the inbox (and the Email Log tab).', 'mailkite-smtp' ) ],
@@ -370,6 +377,60 @@ final class Menu {
 		$mailer     = (string) $s['mailer'];
 		$key_set    = '' !== (string) $s['api_key'];
 		$key_locked = defined( 'MAILKITE_API_KEY' ) && MAILKITE_API_KEY;
+
+		$status = \MailKite\Smtp\Admin\Connect::account_status();
+		if ( $key_set ) :
+			?>
+			<div class="notice <?php echo ( $status && $status['emailVerified'] ) ? 'notice-success' : 'notice-warning'; ?>" style="padding:10px 12px">
+				<p style="margin:0">
+					<strong><?php esc_html_e( 'MailKite account:', 'mailkite-smtp' ); ?></strong>
+					<?php if ( $status ) : ?>
+						<?php echo esc_html( $status['email'] ); ?> (<?php echo esc_html( $status['plan'] ); ?>)
+						<?php if ( $status['emailVerified'] ) : ?>
+							— <span style="color:#00a32a">✓ <?php esc_html_e( 'email verified', 'mailkite-smtp' ); ?></span>
+						<?php else : ?>
+							— <span style="color:#b45309">⚠ <?php esc_html_e( 'email not verified yet — sending is blocked. Click the link in your inbox.', 'mailkite-smtp' ); ?></span>
+						<?php endif; ?>
+					<?php else : ?>
+						<?php esc_html_e( 'API key saved — could not reach MailKite to confirm account status.', 'mailkite-smtp' ); ?>
+					<?php endif; ?>
+				</p>
+				<div style="margin-top:6px">
+					<?php if ( ! $status['emailVerified'] ) : ?>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:8px">
+							<input type="hidden" name="action" value="mailkite_smtp_recheck" />
+							<?php wp_nonce_field( 'mailkite_smtp_recheck' ); ?>
+							<button type="submit" class="button button-small"><?php esc_html_e( 'Re-check verification', 'mailkite-smtp' ); ?></button>
+						</form>
+					<?php endif; ?>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block">
+						<input type="hidden" name="action" value="mailkite_smtp_disconnect" />
+						<?php wp_nonce_field( 'mailkite_smtp_disconnect' ); ?>
+						<button type="submit" class="button-link" style="color:#b32d2e"><?php esc_html_e( 'Disconnect', 'mailkite-smtp' ); ?></button>
+					</form>
+				</div>
+			</div>
+			<?php
+		elseif ( ! $key_set ) :
+			$admin_email = (string) get_option( 'admin_email' );
+			?>
+			<div class="notice notice-info" style="padding:12px">
+				<p style="margin-top:0"><strong><?php esc_html_e( 'Get connected to MailKite — without leaving WordPress', 'mailkite-smtp' ); ?></strong></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:1.5em">
+					<input type="hidden" name="action" value="mailkite_smtp_provision" />
+					<?php wp_nonce_field( 'mailkite_smtp_provision' ); ?>
+					<input type="email" name="account_email" value="<?php echo esc_attr( $admin_email ); ?>" class="regular-text" style="max-width:16em" />
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Create free account', 'mailkite-smtp' ); ?></button>
+				</form>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block">
+					<input type="hidden" name="action" value="mailkite_smtp_oauth_start" />
+					<?php wp_nonce_field( 'mailkite_smtp_oauth_start' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Connect existing account', 'mailkite-smtp' ); ?></button>
+				</form>
+				<p class="description" style="margin-bottom:0"><?php esc_html_e( 'Create: a free account for this email — an API key is set up instantly, and you verify the address from your inbox. Connect: sign in on mailkite.dev (password or Google) and the key is fetched for you. Or paste a key manually below.', 'mailkite-smtp' ); ?></p>
+			</div>
+			<?php
+		endif;
 
 		$detected = \MailKite\Smtp\Migrate\Importer::detect();
 		if ( $detected && 'php' === $mailer ) :

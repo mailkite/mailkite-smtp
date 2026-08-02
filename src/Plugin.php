@@ -37,6 +37,7 @@ final class Plugin {
 
 		if ( is_admin() ) {
 			( new Admin\Menu() )->register();
+			( new Admin\Connect() )->register();
 			add_action( 'admin_init', [ self::class, 'maybe_activation_redirect' ] );
 		}
 		add_action( 'rest_api_init', [ new Admin\Rest(), 'register_routes' ] );

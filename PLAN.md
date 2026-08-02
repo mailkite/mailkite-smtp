@@ -91,7 +91,13 @@ All phases built and verified on WordPress Playground except the items in
       committed — harmless)
 
 ## Later milestones
-- [ ] React wizard + dashboard (D3) with in-admin signup (after SDK spec items)
+- [x] **In-admin signup + OAuth connect shipped 2026-08-02** (PHP, ahead of the React
+      wizard): "Create free account" (register-by-email via POST /api/v1/provision —
+      key stored instantly, channel=wordpress-plugin + ref attribution, sending blocked
+      until the email is verified), "Connect existing account" (RFC 7591 dynamic client
+      registration + authorization-code + PKCE against MailKite's OAuth server, then
+      GET /api/keys with the token), /v1/me status card with re-check, and Disconnect.
+- [ ] React wizard + dashboard (D3) — now purely a UI-polish port; every flow exists
 - [ ] Slack/Discord/Telegram *native* alert channels beyond webhook; alert digests
 - [ ] Suppression sync UI (D5); multisite network-admin settings screen
 - [ ] Launch content cluster (mailkite-seo skill) the week of wp.org approval;
