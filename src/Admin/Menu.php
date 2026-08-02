@@ -435,7 +435,7 @@ final class Menu {
 								printf(
 									/* translators: %s: link to MailKite dashboard. */
 									esc_html__( 'No account yet? Create one free at %s — a guided in-admin setup is coming in the next release.', 'mailkite-smtp' ),
-									'<a href="https://app.mailkite.dev/?utm_source=wp-plugin&amp;utm_medium=plugin" target="_blank" rel="noopener">app.mailkite.dev</a>'
+									'<a href="https://app.mailkite.dev/?channel=wordpress-plugin&amp;utm_source=wp-plugin&amp;utm_medium=plugin" target="_blank" rel="noopener">app.mailkite.dev</a>'
 								);
 								?>
 							</p>
