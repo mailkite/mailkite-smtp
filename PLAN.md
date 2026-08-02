@@ -74,8 +74,9 @@ All phases built and verified on WordPress Playground except the items in
 ## Deferred — needs Gabe / external accounts
 - [ ] **wp.org submission** (locks slug; needs `bucabay` wp.org account): upload zip at
       wordpress.org/plugins/developers/add/ after a real-mail smoke test
-- [ ] **Real-transport smoke test**: one send each via a live MailKite key + one BYO
-      provider; `wp mailkite` on a real wp-cli install
+- [x] **Real-transport smoke test**: live MailKite send confirmed working
+      (Gabe, 2026-08-02). Still nice-to-have: one BYO-provider send and
+      `wp mailkite` on a real wp-cli install — not launch gates
 - [ ] **Mint the affiliate ref code** (8-char, dashboard affiliate page) → replace UTM
       link in `src/Admin/Menu.php` and use in future wizard signup
 - [ ] **SDK spec additions** (api-ssot project): `/api/keys*`, `/api/billing/usage`,
