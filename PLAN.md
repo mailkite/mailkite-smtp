@@ -77,8 +77,8 @@ All phases built and verified on WordPress Playground except the items in
 - [x] **Real-transport smoke test**: live MailKite send confirmed working
       (Gabe, 2026-08-02). Still nice-to-have: one BYO-provider send and
       `wp mailkite` on a real wp-cli install — not launch gates
-- [ ] **Mint the affiliate ref code** (8-char, dashboard affiliate page) → replace UTM
-      link in `src/Admin/Menu.php` and use in future wizard signup
+- [x] **Affiliate ref code wired**: `xmbf3bd0` (Gabe's admin account) + `channel=wordpress-plugin`
+      on the settings-page link; channel attribution deployed platform-wide 2026-08-02
 - [ ] **SDK spec additions** (api-ssot project): `/api/keys*`, `/api/billing/usage`,
       webhook-signature scheme, suppressions endpoint (unblocks in-admin signup, quota
       meter, D2, D5)
