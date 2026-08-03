@@ -16,9 +16,9 @@
   claim.
 - Every mailbox lands on the user's **Credentials screen**: real **IMAP user/pass**
   (`mk_imap_…` app-password, IMAPS 993) that is **also API access** for the same scope.
-- Platform dependency (in progress, MailKite side): IMAP credentials usable **per
-  address or per domain with route-style matching**, and valid as REST API bearer for
-  the same scope.
+- Platform dependency: **shipped 2026-08-03** — app passwords scope to a domain + address
+  pattern (route-style matching) and carry `protocols: ["imap","api"]`, so one credential
+  is both the IMAP password and the API bearer for that scope. See §6.
 
 ## 2. Admin controls (Settings → new "Mailboxes" tab; everything default-off)
 
@@ -38,18 +38,13 @@
 1. **Claim** (auto-from-username or self-registered): lowercase, slugify to
    `[a-z0-9._-]`, length 1–64; reject reserved list, existing WP claims (usermeta
    uniqueness), and existing MailKite routes on the domain.
-2. **Provision on MailKite** (site's API key):
-   a. create the **mailbox** for `local@domain` (needs mailbox-create in the public
-      spec — see §6 platform asks),
-   b. create a **route** `local@domain → store to mailbox` (createRoute exists). The
-      domain's catch-all (site inbound webhook) is untouched — specific route wins,
-      which is exactly the routes-matching model,
-   c. create a **mailbox-scoped `mk_imap_` credential** (`POST /api/imap/keys` with
-      `mailbox_id` — exists today, migration 0086),
-   d. store per-user in usermeta: address, mailbox id, credential id + secret
-      (AES-encrypted with the plugin's existing Crypto).
-3. **Revoke/release**: delete credential (`DELETE /api/imap/keys/:id`), delete route,
-   apply the deletion policy to the mailbox.
+2. **Provision on MailKite** (site's API key) — now a single call:
+   `createAppPassword({ domain, address: "<local>", protocols: ["imap","api"], label })`.
+   Store per-user in usermeta: address, app-password id + secret (AES-encrypted with the
+   plugin's existing `Crypto`). Add a store-to-mailbox route only if the domain's
+   catch-all would otherwise swallow the address.
+3. **Revoke/release**: `deleteAppPassword` (IMAP sessions and API calls using it stop
+   immediately), then apply the deletion policy from §2.
 
 ## 4. Credentials screen (per user)
 
@@ -59,8 +54,8 @@ front-end **`[mailkite_credentials]` shortcode/block** for membership-style site
 Shows: the address; IMAP settings (host `imap.mailkite.dev`, port 993, SSL, username =
 the address, password = `mk_imap_…` shown **once** at creation with copy button, then
 masked with a **Regenerate** action); "works in Apple Mail / Thunderbird / any IMAP
-client" hint; and an **API access** block (same credential as bearer for the
-mailbox-scoped REST reads) marked "rolling out" until the platform lands it (§6).
+client" hint; and an **API access** block — the same secret is the API bearer for that
+address scope (`protocols: ["imap","api"]`), with a copyable curl example.
 
 ## 5. The in-WordPress inbox (client side)
 
@@ -69,11 +64,9 @@ mailbox-scoped REST reads) marked "rolling out" until the platform lands it (§6
 - **Phase A — read**: message list (unread badges, sender, subject, date) + reader
   (text + sanitized HTML via `wp_kses_post`, attachment list with download).
   Transport: a WP REST proxy (`mailkite-smtp/v1/inbox/*`, logged-in + per-user
-  authorization) that calls MailKite server-side. Until scoped API access lands, the
-  proxy uses the **site key filtered to the user's mailbox in PHP** (site admin can
-  already read all site mail today, so this leaks nothing new); once mailbox-scoped
-  bearer access ships, the proxy switches to **each user's own credential** and the
-  site key drops out of the read path entirely.
+  authorization) that calls `listMailboxMessages` / `getMailboxMessageRaw` /
+  `setMailboxMessageFlags` **with that user's own app password** — the site key never
+  enters the read path.
 - **Phase B — act**: reply/forward/compose. Sends go through the plugin's existing
   mailer with `From:` **forced to the user's claimed address** (never user-chosen),
   logged like all plugin mail, per-user daily cap from §2.
@@ -102,8 +95,8 @@ instead of mailbox-create + route + credential.
 
 - **P1 — plumbing** (plugin): Mailboxes settings tab, reserved-list engine, claim +
   provisioning + revocation, credentials screen (IMAP usable in real clients on day
-  one). *Depends only on what exists today + mailbox-create being spec'd.*
-- **P2 — inbox read** (plugin): REST proxy + list/reader UI (site-key interim).
+  one). *Fully unblocked — every API it needs is shipped and in the SDKs.*
+- **P2 — inbox read** (plugin): REST proxy + list/reader UI, per-user credentials.
 - **P3 — compose/reply + notifications.**
 - ~~P4 — scoped-credential migration~~ **folded into P2** (platform shipped 2026-08-03):
   per-user app passwords are available immediately, so the site key never enters the
@@ -127,6 +120,6 @@ instead of mailbox-create + route + credential.
 2. May users pick arbitrary local parts, or username-derived only (when self-serve is
    on)? Aliases (plus-addressing is free already)?
 3. Address release on username change / user deletion — reassignable after cooldown?
-4. Which of the §6 platform asks do you want built next session (spec for
-   `/api/imap/keys` + mailbox CRUD is the cheap unblocker; the scoped-bearer read
-   surface is the big one)?
+4. ~~Which platform ask next~~ — all shipped. Remaining question: build P1+P2 in one
+   pass, or ship P1 (addresses + credentials, usable in Apple Mail) first and let the
+   in-WP reader follow?
