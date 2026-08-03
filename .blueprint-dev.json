@@ -2,6 +2,12 @@
 	"landingPage": "/wp-admin/admin.php?page=mailkite-smtp",
 	"login": true,
 	"steps": [
-		{ "step": "activatePlugin", "pluginPath": "mailkite-smtp/mailkite-smtp.php" }
-	]
+		{
+			"step": "activatePlugin",
+			"pluginPath": "mailkite-smtp/mailkite-smtp.php"
+		}
+	],
+	"features": {
+		"networking": true
+	}
 }
