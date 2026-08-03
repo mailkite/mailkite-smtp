@@ -51,18 +51,8 @@ final class Options {
 		'inbound_domain_id' => '',  // dom_… the webhook is installed on.
 		'inbound_forward'  => '',
 		'summary_enabled'  => false,
-		// --- User mailboxes (INBOX-PLAN.md). Everything off until an admin opts in. ---
-		'mailboxes_enabled'    => false,
-		'mailbox_domain'       => '',      // domain name mailboxes live on.
-		'mailbox_auto_assign'  => false,   // tie {username}@domain to logged-in users.
-		'mailbox_self_register' => false,  // let users pick their own local part.
-		'mailbox_roles'        => [ 'administrator' ],
-		'mailbox_reserved'     => self::DEFAULT_RESERVED,
-		'mailbox_send_limit'   => 200,     // per user per day.
 	];
 
-	/** Role addresses (RFC 2142 + the usual impersonation targets) nobody may claim. */
-	public const DEFAULT_RESERVED = 'postmaster, abuse, admin, administrator, root, security, hostmaster, webmaster, billing, support, sales, info, contact, help, legal, privacy, dmca, noreply, no-reply, mail, smtp, imap, api, www, test';
 
 	public const MAILERS = [ 'php', 'smtp', 'mailkite', 'sendgrid', 'brevo', 'mailgun' ];
 
@@ -126,7 +116,7 @@ final class Options {
 		if ( isset( $input['mailer'] ) && in_array( $input['mailer'], self::MAILERS, true ) ) {
 			$clean['mailer'] = $input['mailer'];
 		}
-		foreach ( [ 'smtp_host', 'smtp_username', 'mailgun_domain', 'inbound_domain', 'inbound_domain_id', 'mailbox_domain' ] as $key ) {
+		foreach ( [ 'smtp_host', 'smtp_username', 'mailgun_domain', 'inbound_domain', 'inbound_domain_id' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = sanitize_text_field( (string) $input[ $key ] );
 			}
@@ -186,22 +176,13 @@ final class Options {
 		if ( isset( $input['smtp_encryption'] ) && in_array( $input['smtp_encryption'], [ 'none', 'ssl', 'tls' ], true ) ) {
 			$clean['smtp_encryption'] = $input['smtp_encryption'];
 		}
-		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled', 'inbound_enabled', 'summary_enabled', 'mailboxes_enabled', 'mailbox_auto_assign', 'mailbox_self_register' ] as $key ) {
+		foreach ( [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled', 'inbound_enabled', 'summary_enabled' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = filter_var( $input[ $key ], FILTER_VALIDATE_BOOLEAN );
 			}
 		}
 		if ( isset( $input['log_retention'] ) ) {
 			$clean['log_retention'] = max( 1, (int) $input['log_retention'] );
-		}
-		if ( isset( $input['mailbox_send_limit'] ) ) {
-			$clean['mailbox_send_limit'] = max( 0, (int) $input['mailbox_send_limit'] );
-		}
-		if ( isset( $input['mailbox_reserved'] ) ) {
-			$clean['mailbox_reserved'] = sanitize_textarea_field( (string) $input['mailbox_reserved'] );
-		}
-		if ( isset( $input['mailbox_roles'] ) && is_array( $input['mailbox_roles'] ) ) {
-			$clean['mailbox_roles'] = array_values( array_filter( array_map( 'sanitize_key', $input['mailbox_roles'] ) ) );
 		}
 
 		return $clean;

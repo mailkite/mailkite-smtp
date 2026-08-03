@@ -91,7 +91,7 @@ Yes. Received messages get a Reply action in the Email Log. The reply goes out a
 * Inbound: reply to received mail from the Email Log, threaded (From is forced to the address it was delivered to).
 * Log stores the real sender, conversation id and message id; conversation view groups both sides of an exchange.
 * Inbound tab explains what inbound is for, with the developer hook, log link and forwarding in one place.
-* User mailboxes: give WordPress users real addresses (IMAP + API), with an Inbox screen and `[mailkite_inbox]`.
+* User mailboxes moved to their own plugin, **MailKite Mailboxes** — real addresses for WordPress users, an Inbox screen and `[mailkite_inbox]`.
 
 = 0.2.0 =
 * SendGrid, Brevo, and Mailgun mailers (bring your own key).

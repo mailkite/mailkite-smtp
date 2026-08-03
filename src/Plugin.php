@@ -37,9 +37,6 @@ final class Plugin {
 
 		Log\LogTable::maybe_upgrade(); // In-place updates never fire the activation hook.
 
-		( new Mailbox\Inbox() )->register();   // menu + [mailkite_inbox] + reply handler.
-		( new Mailbox\Admin() )->register();   // settings tab, profile screen, lifecycle.
-
 		if ( is_admin() ) {
 			( new Admin\Menu() )->register();
 			( new Admin\Connect() )->register();

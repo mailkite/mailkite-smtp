@@ -73,8 +73,7 @@ final class Menu {
 			$this->render_test();
 		} elseif ( 'inbound' === $tab ) {
 			$this->render_inbound();
-		} elseif ( 'mailboxes' === $tab ) {
-			( new \MailKite\Smtp\Mailbox\Admin() )->render_settings_tab();
+
 		} elseif ( 'health' === $tab ) {
 			$this->render_health();
 		} else {
@@ -101,9 +100,6 @@ final class Menu {
 			'smtp_username',
 			'smtp_password',
 			'log_retention',
-			'mailbox_domain',
-			'mailbox_reserved',
-			'mailbox_send_limit',
 			'alert_email',
 			'alert_webhook',
 			'sendgrid_key',
@@ -133,18 +129,12 @@ final class Menu {
 			'settings' => [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ],
 			'inbound'  => [], // inbound_enabled is managed by the connect/disconnect actions, never this form.
 			'health'   => [ 'summary_enabled' ],
-			'mailboxes' => [ 'mailboxes_enabled', 'mailbox_auto_assign', 'mailbox_self_register' ],
 		];
 		foreach ( $bool_map[ $tab ] ?? $bool_map['settings'] as $bool_field ) {
 			$input[ $bool_field ] = isset( $_POST[ $bool_field ] );
 		}
 		if ( isset( $_POST['inbound_forward'] ) ) {
 			$input['inbound_forward'] = wp_unslash( $_POST['inbound_forward'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
-		}
-		if ( isset( $_POST['mailbox_roles'] ) && is_array( $_POST['mailbox_roles'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
-			$input['mailbox_roles'] = array_values( wp_unslash( $_POST['mailbox_roles'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-		} elseif ( 'mailboxes' === $tab ) {
-			$input['mailbox_roles'] = []; // All boxes unchecked.
 		}
 		if ( isset( $_POST['routing_rules'] ) && is_array( $_POST['routing_rules'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- per-rule sanitize in Options::sanitize().
 			$input['routing_rules'] = array_values( wp_unslash( $_POST['routing_rules'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
@@ -156,7 +146,7 @@ final class Menu {
 			\MailKite\Smtp\Inbound::rotate_secret();
 		}
 
-		$this->redirect( in_array( $tab, [ 'inbound', 'health', 'mailboxes' ], true ) ? $tab : 'settings', 'saved' );
+		$this->redirect( in_array( $tab, [ 'inbound', 'health' ], true ) ? $tab : 'settings', 'saved' );
 	}
 
 	/**
@@ -388,7 +378,6 @@ final class Menu {
 			'log'      => __( 'Email Log', 'mailkite-smtp' ),
 			'test'     => __( 'Send Test', 'mailkite-smtp' ),
 			'inbound'  => __( 'Inbound', 'mailkite-smtp' ),
-			'mailboxes' => __( 'Mailboxes', 'mailkite-smtp' ),
 			'health'   => __( 'Domain Health', 'mailkite-smtp' ),
 		];
 		echo '<nav class="nav-tab-wrapper">';

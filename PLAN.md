@@ -91,7 +91,9 @@ All phases built and verified on WordPress Playground except the items in
       committed — harmless)
 
 ## Later milestones
-- [x] **User Mailboxes — real inbox in WordPress** (2026-08-03, plan:
+- [x] **User Mailboxes — real inbox in WordPress** — SPLIT OUT 2026-08-03 into its own
+      plugin `~/code/mailkite/mailkite-mailboxes` (MailKite Mailboxes 0.1.0), depending on
+      this one via `Requires Plugins`. Rationale in that repo's first commit. (2026-08-03, plan:
       [INBOX-PLAN.md](INBOX-PLAN.md)): Mailboxes settings tab (all off by default,
       role gate, reserved list, per-user send cap), per-user address claim minting a
       scoped app password (imap+api), credentials screen with mail-app settings,
