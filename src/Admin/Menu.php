@@ -754,17 +754,19 @@ final class Menu {
 
 		<hr/>
 		<h2><?php esc_html_e( 'Backup & migrate', 'mailkite-smtp' ); ?></h2>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:1em">
-			<input type="hidden" name="action" value="mailkite_smtp_export_settings" />
-			<?php wp_nonce_field( 'mailkite_smtp_export_settings' ); ?>
-			<button type="submit" class="button"><?php esc_html_e( 'Export settings (JSON, no secrets)', 'mailkite-smtp' ); ?></button>
-		</form>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block">
-			<input type="hidden" name="action" value="mailkite_smtp_import_settings" />
-			<?php wp_nonce_field( 'mailkite_smtp_import_settings' ); ?>
-			<input type="text" name="settings_json" class="regular-text" placeholder='{"mailer":"mailkite", …}' />
-			<button type="submit" class="button"><?php esc_html_e( 'Import JSON', 'mailkite-smtp' ); ?></button>
-		</form>
+		<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0">
+				<input type="hidden" name="action" value="mailkite_smtp_export_settings" />
+				<?php wp_nonce_field( 'mailkite_smtp_export_settings' ); ?>
+				<button type="submit" class="button"><?php esc_html_e( 'Export settings (JSON, no secrets)', 'mailkite-smtp' ); ?></button>
+			</form>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;align-items:center;gap:8px;margin:0">
+				<input type="hidden" name="action" value="mailkite_smtp_import_settings" />
+				<?php wp_nonce_field( 'mailkite_smtp_import_settings' ); ?>
+				<input type="text" name="settings_json" class="regular-text" placeholder='{"mailer":"mailkite", …}' />
+				<button type="submit" class="button"><?php esc_html_e( 'Import JSON', 'mailkite-smtp' ); ?></button>
+			</form>
+		</div>
 		<?php
 	}
 
