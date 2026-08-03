@@ -31,6 +31,8 @@ final class Menu {
 		add_action( 'admin_post_mailkite_smtp_import', [ $this, 'handle_import' ] );
 		add_action( 'admin_post_mailkite_smtp_export', [ $this, 'handle_export' ] );
 		add_action( 'admin_post_mailkite_smtp_rotate_inbound', [ $this, 'handle_rotate_inbound' ] );
+		add_action( 'admin_post_mailkite_smtp_inbound_connect', [ $this, 'handle_inbound_connect' ] );
+		add_action( 'admin_post_mailkite_smtp_inbound_disconnect', [ $this, 'handle_inbound_disconnect' ] );
 		add_action( 'admin_post_mailkite_smtp_export_settings', [ $this, 'handle_export_settings' ] );
 		add_action( 'admin_post_mailkite_smtp_import_settings', [ $this, 'handle_import_settings' ] );
 		add_action( 'admin_post_mailkite_smtp_health_check', [ $this, 'handle_health_check' ] );
@@ -123,7 +125,7 @@ final class Menu {
 		$tab      = isset( $_POST['_back_tab'] ) ? sanitize_key( wp_unslash( $_POST['_back_tab'] ) ) : 'settings';
 		$bool_map = [
 			'settings' => [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ],
-			'inbound'  => [ 'inbound_enabled' ],
+			'inbound'  => [], // inbound_enabled is managed by the connect/disconnect actions, never this form.
 			'health'   => [ 'summary_enabled' ],
 		];
 		foreach ( $bool_map[ $tab ] ?? $bool_map['settings'] as $bool_field ) {
@@ -152,6 +154,27 @@ final class Menu {
 		$this->guard( 'mailkite_smtp_rotate_inbound' );
 		\MailKite\Smtp\Inbound::rotate_secret();
 		$this->redirect( 'inbound', 'saved' );
+	}
+
+	/**
+	 * One-click inbound: install the webhook + signing secret on the chosen domain (admin-post).
+	 */
+	public function handle_inbound_connect(): void {
+		$this->guard( 'mailkite_smtp_inbound_connect' );
+
+		$domain_id = isset( $_POST['inbound_domain_id'] ) ? sanitize_text_field( wp_unslash( $_POST['inbound_domain_id'] ) ) : '';
+		$result    = \MailKite\Smtp\Inbound::connect( $domain_id );
+
+		$this->redirect( 'inbound', true === $result ? 'inbound_on' : 'inbound_failed' );
+	}
+
+	/**
+	 * Turn inbound off: remove the webhook from the domain (admin-post).
+	 */
+	public function handle_inbound_disconnect(): void {
+		$this->guard( 'mailkite_smtp_inbound_disconnect' );
+		\MailKite\Smtp\Inbound::disconnect();
+		$this->redirect( 'inbound', 'inbound_off' );
 	}
 
 	/**
@@ -356,6 +379,9 @@ final class Menu {
 			'provision_failed' => [ 'error', __( 'Could not create the account — try again in a minute.', 'mailkite-smtp' ) ],
 			'rate_limited'  => [ 'error', __( 'Too many attempts — try again later.', 'mailkite-smtp' ) ],
 			'oauth_failed'  => [ 'error', __( 'Connecting to MailKite failed — try again, or paste an API key instead.', 'mailkite-smtp' ) ],
+			'inbound_on'    => [ 'success', __( 'Inbound is on — the webhook and signature verification were set up on your MailKite domain automatically.', 'mailkite-smtp' ) ],
+			'inbound_off'   => [ 'success', __( 'Inbound turned off and the webhook removed.', 'mailkite-smtp' ) ],
+			'inbound_failed' => [ 'error', __( 'Could not set up the webhook on MailKite — check the domain is verified and try again.', 'mailkite-smtp' ) ],
 			'imported'      => [ 'success', __( 'Settings imported — review below, then send a test email.', 'mailkite-smtp' ) ],
 			'import_failed' => [ 'error', __( 'Nothing importable found (only generic-SMTP configurations can be imported).', 'mailkite-smtp' ) ],
 			'test_sent'     => [ 'success', __( 'Test email sent — check the inbox (and the Email Log tab).', 'mailkite-smtp' ) ],
@@ -771,56 +797,96 @@ final class Menu {
 	}
 
 	/**
-	 * Inbound tab: webhook URL, secret rotation, forwarding, developer hook docs.
+	 * Inbound tab: one-click automated setup — the plugin installs the webhook on
+	 * the connected MailKite account itself (URL + signing secret), no copy-paste.
 	 */
 	private function render_inbound(): void {
-		$s   = Options::all();
-		$url = \MailKite\Smtp\Inbound::url();
+		$s         = Options::all();
+		$connected = (bool) $s['inbound_enabled'] && '' !== (string) $s['inbound_domain_id'];
+		$key_set   = '' !== (string) $s['api_key'];
+		?>
+		<p style="margin-top:1em"><?php esc_html_e( 'Receive email into WordPress: every message to your MailKite domain fires a hook your plugins can consume — and can be forwarded to an inbox.', 'mailkite-smtp' ); ?></p>
+		<?php
+		if ( ! $key_set ) :
+			?>
+			<div class="notice notice-info" style="padding:12px"><p style="margin:0">
+				<?php esc_html_e( 'Connect a MailKite account first —', 'mailkite-smtp' ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=mailkite-smtp' ) ); ?>"><?php esc_html_e( 'go to Settings', 'mailkite-smtp' ); ?></a>
+			</p></div>
+			<?php
+		elseif ( $connected ) :
+			?>
+			<div class="notice notice-success" style="padding:12px">
+				<p style="margin-top:0">
+					<strong>✓ <?php esc_html_e( 'Inbound is on', 'mailkite-smtp' ); ?></strong> —
+					<?php
+					/* translators: %s: domain name. */
+					printf( esc_html__( 'email to %s is delivered to this site.', 'mailkite-smtp' ), '<code>' . esc_html( (string) $s['inbound_domain'] ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inline.
+					?>
+					<span class="description"><?php esc_html_e( 'Deliveries are HMAC-signature verified automatically.', 'mailkite-smtp' ); ?></span>
+				</p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:0">
+					<input type="hidden" name="action" value="mailkite_smtp_inbound_disconnect" />
+					<?php wp_nonce_field( 'mailkite_smtp_inbound_disconnect' ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Turn off inbound', 'mailkite-smtp' ); ?></button>
+				</form>
+			</div>
+			<?php
+		else :
+			$domains = \MailKite\Smtp\Inbound::list_domains();
+			if ( null === $domains ) :
+				?>
+				<div class="notice notice-warning" style="padding:12px"><p style="margin:0"><?php esc_html_e( 'Could not reach MailKite to list your domains — try again shortly.', 'mailkite-smtp' ); ?></p></div>
+				<?php
+			elseif ( ! $domains ) :
+				?>
+				<div class="notice notice-info" style="padding:12px"><p style="margin:0">
+					<?php esc_html_e( 'Your MailKite account has no domains yet. Add and verify one first:', 'mailkite-smtp' ); ?>
+					<a href="https://app.mailkite.dev" target="_blank" rel="noopener">app.mailkite.dev</a>
+				</p></div>
+				<?php
+			else :
+				// Preselect the most likely domain: forced-from domain, else the site host, else the first.
+				$from      = (string) $s['force_from_email'];
+				$from_dom  = is_email( $from ) ? substr( $from, strpos( $from, '@' ) + 1 ) : '';
+				$site_host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+				$preselect = $domains[0]['id'];
+				foreach ( $domains as $d ) {
+					if ( $d['domain'] === $from_dom || $d['domain'] === $site_host ) {
+						$preselect = $d['id'];
+						break;
+					}
+				}
+				?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<input type="hidden" name="action" value="mailkite_smtp_inbound_connect" />
+					<?php wp_nonce_field( 'mailkite_smtp_inbound_connect' ); ?>
+					<label for="mk-inb-domain"><?php esc_html_e( 'Receive email for', 'mailkite-smtp' ); ?></label>
+					<select name="inbound_domain_id" id="mk-inb-domain">
+						<?php foreach ( $domains as $d ) : ?>
+							<option value="<?php echo esc_attr( $d['id'] ); ?>" <?php selected( $preselect, $d['id'] ); ?>><?php echo esc_html( $d['domain'] ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Turn on inbound', 'mailkite-smtp' ); ?></button>
+					<span class="description"><?php esc_html_e( 'Installs the webhook and signature verification automatically.', 'mailkite-smtp' ); ?></span>
+				</form>
+				<?php
+			endif;
+		endif;
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
 			<input type="hidden" name="action" value="mailkite_smtp_save" />
 			<input type="hidden" name="_back_tab" value="inbound" />
 			<?php wp_nonce_field( 'mailkite_smtp_save' ); ?>
-			<p><?php esc_html_e( 'Receive email into WordPress: point a MailKite inbound route at this site and every message fires a hook your plugins can consume — and can be forwarded to an inbox.', 'mailkite-smtp' ); ?></p>
 			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Inbound email', 'mailkite-smtp' ); ?></th>
-					<td><label><input type="checkbox" name="inbound_enabled" <?php checked( (bool) $s['inbound_enabled'] ); ?> /> <?php esc_html_e( 'Enable the inbound webhook endpoint', 'mailkite-smtp' ); ?></label></td>
-				</tr>
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Webhook URL', 'mailkite-smtp' ); ?></th>
-					<td>
-						<?php if ( $url ) : ?>
-							<code style="user-select:all"><?php echo esc_html( $url ); ?></code>
-							<p class="description"><?php esc_html_e( 'Paste this as the webhook for your domain in the MailKite dashboard (Domains → Webhook).', 'mailkite-smtp' ); ?></p>
-						<?php else : ?>
-							<em><?php esc_html_e( 'Enable inbound and save — a secret URL will be generated.', 'mailkite-smtp' ); ?></em>
-						<?php endif; ?>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="mk-inb-hmac"><?php esc_html_e( 'Signature secret', 'mailkite-smtp' ); ?></label></th>
-					<td>
-						<input type="password" class="regular-text" id="mk-inb-hmac" name="inbound_hmac_secret" value="" autocomplete="new-password"
-							placeholder="<?php echo esc_attr( '' !== (string) $s['inbound_hmac_secret'] ? __( '•••••••• (saved — enter to replace)', 'mailkite-smtp' ) : 'whsec_...' ); ?>" />
-						<p class="description"><?php esc_html_e( 'Recommended: paste your domain’s webhook signing secret (MailKite dashboard → Domains → Webhook secret). Deliveries are then verified with an HMAC signature and a 5-minute freshness window, on top of the secret URL.', 'mailkite-smtp' ); ?></p>
-					</td>
-				</tr>
 				<tr>
 					<th scope="row"><label for="mk-inb-fwd"><?php esc_html_e( 'Forward a copy to', 'mailkite-smtp' ); ?></label></th>
 					<td><input type="email" class="regular-text" id="mk-inb-fwd" name="inbound_forward" value="<?php echo esc_attr( (string) $s['inbound_forward'] ); ?>" />
 					<p class="description"><?php esc_html_e( 'Optional. Each inbound email is also sent to this address.', 'mailkite-smtp' ); ?></p></td>
 				</tr>
 			</table>
-			<?php submit_button( __( 'Save Inbound Settings', 'mailkite-smtp' ) ); ?>
+			<?php submit_button( __( 'Save', 'mailkite-smtp' ) ); ?>
 		</form>
-		<?php if ( $url ) : ?>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="mailkite_smtp_rotate_inbound" />
-				<?php wp_nonce_field( 'mailkite_smtp_rotate_inbound' ); ?>
-				<button type="submit" class="button"><?php esc_html_e( 'Rotate secret URL', 'mailkite-smtp' ); ?></button>
-			</form>
-		<?php endif; ?>
 		<h2><?php esc_html_e( 'For developers', 'mailkite-smtp' ); ?></h2>
 		<pre style="background:#f6f7f7;padding:12px;max-width:760px;overflow:auto">add_action( 'mailkite_smtp_inbound', function ( array $message, array $payload ) {
 	// $message: from, to, subject, text, html, attachments …

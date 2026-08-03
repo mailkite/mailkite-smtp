@@ -63,6 +63,143 @@ final class Inbound {
 	}
 
 	/**
+	 * The account's domains via GET /api/domains (5-minute cache).
+	 *
+	 * @return array<int, array{id: string, domain: string}>|null Null when no key or unreachable.
+	 */
+	public static function list_domains(): ?array {
+		$key = (string) Options::get( 'api_key' );
+		if ( '' === $key ) {
+			return null;
+		}
+		$cached = get_transient( 'mailkite_smtp_domains' );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		$response = wp_remote_get(
+			Options::get( 'api_base' ) . '/api/domains',
+			[
+				'timeout' => 10,
+				'headers' => [ 'Authorization' => 'Bearer ' . $key ],
+			]
+		);
+		if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+			return null;
+		}
+		$rows = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $rows ) ) {
+			return null;
+		}
+		$domains = [];
+		foreach ( $rows as $row ) {
+			if ( is_array( $row ) && ! empty( $row['id'] ) && ! empty( $row['domain'] ) ) {
+				$domains[] = [
+					'id'     => (string) $row['id'],
+					'domain' => (string) $row['domain'],
+				];
+			}
+		}
+		set_transient( 'mailkite_smtp_domains', $domains, 5 * MINUTE_IN_SECONDS );
+
+		return $domains;
+	}
+
+	/**
+	 * Fully automated inbound setup on a MailKite domain: enable the local
+	 * endpoint, install its URL as the domain webhook, and fetch the domain's
+	 * signing secret so signature verification is on from the first delivery.
+	 *
+	 * @param string $domain_id The dom_… to connect.
+	 * @return true|\WP_Error
+	 */
+	public static function connect( string $domain_id ) {
+		$key  = (string) Options::get( 'api_key' );
+		$base = (string) Options::get( 'api_base' );
+		if ( '' === $key ) {
+			return new WP_Error( 'no_key', __( 'Connect a MailKite account first.', 'mailkite-smtp' ) );
+		}
+
+		$domains = self::list_domains() ?? [];
+		$name    = '';
+		foreach ( $domains as $candidate ) {
+			if ( $candidate['id'] === $domain_id ) {
+				$name = $candidate['domain'];
+			}
+		}
+		if ( '' === $name ) {
+			return new WP_Error( 'bad_domain', __( 'That domain does not belong to the connected account.', 'mailkite-smtp' ) );
+		}
+
+		if ( '' === (string) Options::get( 'inbound_secret' ) ) {
+			self::rotate_secret();
+		}
+		Options::update( [ 'inbound_enabled' => true ] );
+
+		$auth = [ 'Authorization' => 'Bearer ' . $key ];
+		$put  = wp_remote_request(
+			$base . '/api/domains/' . rawurlencode( $domain_id ) . '/webhook',
+			[
+				'method'  => 'PUT',
+				'timeout' => 15,
+				'headers' => $auth + [ 'Content-Type' => 'application/json' ],
+				'body'    => wp_json_encode( [ 'url' => self::url() ] ),
+			]
+		);
+		if ( is_wp_error( $put ) || 2 !== intdiv( (int) wp_remote_retrieve_response_code( $put ), 100 ) ) {
+			Options::update( [ 'inbound_enabled' => false ] );
+
+			return new WP_Error( 'webhook_failed', __( 'MailKite rejected the webhook — is the domain verified?', 'mailkite-smtp' ) );
+		}
+
+		// Signing secret → automatic HMAC verification (best-effort: token auth still guards
+		// the endpoint if this call fails).
+		$sec    = wp_remote_get(
+			$base . '/api/domains/' . rawurlencode( $domain_id ) . '/webhook/secret',
+			[
+				'timeout' => 10,
+				'headers' => $auth,
+			]
+		);
+		$secret = is_wp_error( $sec ) ? '' : (string) ( json_decode( wp_remote_retrieve_body( $sec ), true )['secret'] ?? '' );
+
+		Options::update(
+			[
+				'inbound_domain'      => $name,
+				'inbound_domain_id'   => $domain_id,
+				'inbound_hmac_secret' => $secret,
+			]
+		);
+
+		return true;
+	}
+
+	/**
+	 * Tear inbound down: remove the domain webhook and disable the endpoint.
+	 */
+	public static function disconnect(): void {
+		$key       = (string) Options::get( 'api_key' );
+		$domain_id = (string) Options::get( 'inbound_domain_id' );
+		if ( '' !== $key && '' !== $domain_id ) {
+			wp_remote_request(
+				Options::get( 'api_base' ) . '/api/domains/' . rawurlencode( $domain_id ) . '/webhook',
+				[
+					'method'  => 'DELETE',
+					'timeout' => 10,
+					'headers' => [ 'Authorization' => 'Bearer ' . $key ],
+				]
+			);
+		}
+		Options::update(
+			[
+				'inbound_enabled'     => false,
+				'inbound_domain'      => '',
+				'inbound_domain_id'   => '',
+				'inbound_hmac_secret' => '',
+			]
+		);
+	}
+
+	/**
 	 * Webhook callback.
 	 *
 	 * @param WP_REST_Request $request Incoming webhook.

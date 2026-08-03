@@ -46,7 +46,9 @@ final class Options {
 		'routing_rules'    => [], // [ [ 'field' => subject|to, 'match' => str, 'mailer' => id ], ... ].
 		'inbound_enabled'  => false,
 		'inbound_secret'   => '',
-		'inbound_hmac_secret' => '', // whsec_… from MailKite (Domains → Webhook secret); enables signature verification.
+		'inbound_hmac_secret' => '', // whsec_… fetched automatically at connect; enables signature verification.
+		'inbound_domain'   => '',   // display name of the connected MailKite domain.
+		'inbound_domain_id' => '',  // dom_… the webhook is installed on.
 		'inbound_forward'  => '',
 		'summary_enabled'  => false,
 	];
@@ -113,7 +115,7 @@ final class Options {
 		if ( isset( $input['mailer'] ) && in_array( $input['mailer'], self::MAILERS, true ) ) {
 			$clean['mailer'] = $input['mailer'];
 		}
-		foreach ( [ 'smtp_host', 'smtp_username', 'mailgun_domain' ] as $key ) {
+		foreach ( [ 'smtp_host', 'smtp_username', 'mailgun_domain', 'inbound_domain', 'inbound_domain_id' ] as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = sanitize_text_field( (string) $input[ $key ] );
 			}
