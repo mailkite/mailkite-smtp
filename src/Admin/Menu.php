@@ -1008,7 +1008,7 @@ final class Menu {
 						<?php endif; ?>
 					</td>
 					<td>
-						<?php if ( ! $row->no_body ) : ?>
+						<?php if ( ! $row->no_body && 'inbound' !== $row->mailer ) : ?>
 							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 								<input type="hidden" name="action" value="mailkite_smtp_resend" />
 								<input type="hidden" name="log_id" value="<?php echo esc_attr( (string) $row->id ); ?>" />

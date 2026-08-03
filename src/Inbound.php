@@ -242,9 +242,15 @@ final class Inbound {
 			return new WP_Error( 'bad_request', 'Expected a JSON body.', [ 'status' => 400 ] );
 		}
 
-		// MailKite webhook payloads nest the parsed email under `message`; accept
-		// a bare message object too so manual tests work.
+		// The email.received event IS the message (id/from/to/subject/text/html…);
+		// accept a `message`-nested variant too so manual tests keep working.
 		$message = is_array( $payload['message'] ?? null ) ? $payload['message'] : $payload;
+
+		// Addresses arrive structured ({address, name} / arrays of those) per the
+		// email-received-event schema — flatten them for display and the hook payload
+		// keeps the structured originals.
+		$from_disp = self::format_addresses( $message['from'] ?? '' );
+		$to_disp   = self::format_addresses( $message['to'] ?? '' );
 
 		/**
 		 * An inbound email arrived via MailKite.
@@ -255,7 +261,7 @@ final class Inbound {
 		do_action( 'mailkite_smtp_inbound', $message, $payload );
 
 		$subject = (string) ( $message['subject'] ?? '' );
-		$from    = (string) ( $message['from'] ?? '' );
+		$from    = $from_disp;
 
 		$forward = (string) Options::get( 'inbound_forward' );
 		if ( is_email( $forward ) ) {
@@ -283,7 +289,7 @@ final class Inbound {
 				LogTable::name(),
 				[
 					'created_at' => current_time( 'mysql', true ),
-					'mail_to'    => implode( ', ', (array) ( $message['to'] ?? [] ) ),
+					'mail_to'    => $to_disp,
 					'subject'    => sprintf( '%s (from %s)', $subject, $from ),
 					'body'       => mb_substr( $body, 0, 65536 ),
 					'headers'    => null,
@@ -295,6 +301,38 @@ final class Inbound {
 		}
 
 		return rest_ensure_response( [ 'ok' => true ] );
+	}
+
+	/**
+	 * Flatten schema-shaped addresses for display: a string passes through;
+	 * {address, name} becomes "Name <address>"; arrays become a comma list.
+	 *
+	 * @param mixed $value from/to value off the webhook payload.
+	 */
+	private static function format_addresses( $value ): string {
+		if ( is_string( $value ) ) {
+			return $value;
+		}
+		if ( ! is_array( $value ) ) {
+			return '';
+		}
+		// Single {address, name} object.
+		if ( isset( $value['address'] ) || isset( $value['email'] ) ) {
+			$address = (string) ( $value['address'] ?? $value['email'] );
+			$name    = (string) ( $value['name'] ?? '' );
+
+			return '' !== $name ? sprintf( '%s <%s>', $name, $address ) : $address;
+		}
+		// List of strings/objects.
+		$parts = [];
+		foreach ( $value as $entry ) {
+			$formatted = self::format_addresses( $entry );
+			if ( '' !== $formatted ) {
+				$parts[] = $formatted;
+			}
+		}
+
+		return implode( ', ', $parts );
 	}
 
 	/**
