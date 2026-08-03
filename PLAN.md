@@ -91,6 +91,9 @@ All phases built and verified on WordPress Playground except the items in
       committed — harmless)
 
 ## Later milestones
+- [ ] **User Mailboxes — real inbox in WordPress** (plan: [INBOX-PLAN.md](INBOX-PLAN.md)):
+      per-user addresses on the site's domain (off by default, reserved-address list),
+      IMAP+API credentials screen, in-WP inbox. Platform asks tracked in that doc §6.
 - [x] **In-admin signup + OAuth connect shipped 2026-08-02** (PHP, ahead of the React
       wizard): "Create free account" (register-by-email via POST /api/v1/provision —
       key stored instantly, channel=wordpress-plugin + ref attribution, sending blocked
