@@ -84,13 +84,19 @@ mailbox-scoped REST reads) marked "rolling out" until the platform lands it (§6
 
 ## 6. Platform asks (MailKite side — the "in progress" list, confirmed against code)
 
-| Ask | Today | Needed |
-|---|---|---|
-| Mailbox-scoped IMAP app-passwords | ✅ exists (`mailbox_id` on ImapCredentialRow, 0086) | — |
-| **Route-style matching scopes** for credentials (pattern per address/domain, like routes) | ❌ scopes are exact (account / domain / one mailbox) | pattern scope (e.g. `*@clients.example.com`) — Gabe says in progress |
-| **Same credential as API bearer** (REST reads scoped to the credential's mailbox/domain) | ❌ `mk_imap_` only authenticates IMAP (`/api/imap/auth`) | accept `mk_imap_` on a read-only REST surface (messages list/get for the scope) — in progress; unblocks §5 proxy v2 |
-| Mailbox CRUD in the public spec | ❌ mailboxes exist internally, not in api.json | spec + SDK the create/list/delete (SSOT rules apply) |
-| `/api/imap/keys` in the public spec | ❌ undocumented | add to spec (same treatment as the Account group got) |
+| Ask | Status 2026-08-03 |
+|---|---|
+| Mailbox/address-scoped app passwords | ✅ **shipped** — `createAppPassword` with `address` **pattern** scope (`*`, `hello`, `support-*`, `*-agent`) inside a domain |
+| Route-style matching scopes | ✅ **shipped** — that same `address` pattern IS the route-style match |
+| Same credential as API bearer | ✅ **shipped** — `protocols: ["imap","api"]` on the app password |
+| Mailbox read/write API | ✅ **shipped** — `listMailboxMessages`, `getMailboxMessageRaw`, `setMailboxMessageFlags` |
+| All of it in the public spec + SDKs/MCP/CLI | ✅ **shipped** — 77 spec methods @ 0.18.0, propagated |
+
+**Consequence: the whole plan is unblocked, and P4 collapses into P2** — the WP inbox can
+use each user's OWN app password (api protocol, scoped to their address pattern) from the
+first commit; the site-key interim in §5 is no longer needed. Provisioning per user is now
+one call (`createAppPassword` with `address: "<local>"`, `protocols: ["imap","api"]`)
+instead of mailbox-create + route + credential.
 
 ## 7. Build phases
 
@@ -99,9 +105,9 @@ mailbox-scoped REST reads) marked "rolling out" until the platform lands it (§6
   one). *Depends only on what exists today + mailbox-create being spec'd.*
 - **P2 — inbox read** (plugin): REST proxy + list/reader UI (site-key interim).
 - **P3 — compose/reply + notifications.**
-- **P4 — scoped-credential migration** (when platform lands §6): per-user bearer
-  reads, site key out of the read path; pattern scopes let one credential cover
-  `*@domain` for admin tooling.
+- ~~P4 — scoped-credential migration~~ **folded into P2** (platform shipped 2026-08-03):
+  per-user app passwords are available immediately, so the site key never enters the
+  read path.
 - **P5 — multisite**: network domain policy, per-site local-part namespacing.
 
 ## 8. Security & privacy invariants
