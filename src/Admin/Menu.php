@@ -955,6 +955,13 @@ final class Menu {
 	 * Email Log tab.
 	 */
 	private function render_log(): void {
+		$view = isset( $_GET['view'] ) ? absint( $_GET['view'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only view switch.
+		if ( $view ) {
+			$this->render_log_detail( $view );
+
+			return;
+		}
+
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
 		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id, created_at, mail_to, subject, mailer, status, error, redacted, body IS NULL AS no_body FROM %i ORDER BY id DESC LIMIT 100', LogTable::name() ) );
@@ -982,7 +989,9 @@ final class Menu {
 					<td><?php echo esc_html( $row->created_at ); ?></td>
 					<td><?php echo esc_html( $row->mail_to ); ?></td>
 					<td>
-						<?php echo esc_html( $row->subject ); ?>
+						<a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $row->id ], admin_url( 'admin.php' ) ) ); ?>">
+							<?php echo esc_html( $row->subject ); ?>
+						</a>
 						<?php if ( $row->redacted ) : ?>
 							<span class="dashicons dashicons-lock" title="<?php esc_attr_e( 'Body redacted (authentication email)', 'mailkite-smtp' ); ?>" style="color:#999"></span>
 						<?php endif; ?>
@@ -1011,6 +1020,49 @@ final class Menu {
 			<?php endforeach; ?>
 			</tbody>
 		</table>
+		<?php
+	}
+
+	/**
+	 * One logged email in full: metadata + readable body. This is where incoming
+	 * (inbound) mail is read; outbound entries show the same view.
+	 *
+	 * @param int $id Log row id.
+	 */
+	private function render_log_detail( int $id ): void {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) );
+
+		echo '<p style="margin-top:1em"><a href="' . esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log' ], admin_url( 'admin.php' ) ) ) . '">&larr; ' . esc_html__( 'Back to the log', 'mailkite-smtp' ) . '</a></p>';
+
+		if ( ! $row ) {
+			echo '<p>' . esc_html__( 'Log entry not found (it may have been purged).', 'mailkite-smtp' ) . '</p>';
+
+			return;
+		}
+		?>
+		<table class="widefat striped" style="max-width:860px">
+			<tbody>
+				<tr><td style="width:9em"><strong><?php esc_html_e( 'Direction', 'mailkite-smtp' ); ?></strong></td>
+					<td><?php echo 'inbound' === $row->mailer ? esc_html__( 'Received (inbound)', 'mailkite-smtp' ) : esc_html__( 'Sent (outbound)', 'mailkite-smtp' ) . ' — ' . esc_html( $row->mailer ); ?></td></tr>
+				<tr><td><strong><?php esc_html_e( 'Date (UTC)', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->created_at ); ?></td></tr>
+				<tr><td><strong><?php esc_html_e( 'To', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->mail_to ); ?></td></tr>
+				<tr><td><strong><?php esc_html_e( 'Subject', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->subject ); ?></td></tr>
+				<tr><td><strong><?php esc_html_e( 'Status', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->status ); ?></td></tr>
+				<?php if ( $row->error ) : ?>
+					<tr><td><strong><?php esc_html_e( 'Detail', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( (string) $row->error ); ?></td></tr>
+				<?php endif; ?>
+			</tbody>
+		</table>
+		<h2 style="margin-top:1em"><?php esc_html_e( 'Message', 'mailkite-smtp' ); ?></h2>
+		<?php if ( $row->redacted ) : ?>
+			<p class="description"><?php esc_html_e( 'Body not stored — this looked like an authentication email (password reset / verification), and storing those is off by default for your users’ safety.', 'mailkite-smtp' ); ?></p>
+		<?php elseif ( null === $row->body || '' === $row->body ) : ?>
+			<p class="description"><?php esc_html_e( 'No body stored for this entry.', 'mailkite-smtp' ); ?></p>
+		<?php else : ?>
+			<pre style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px;max-width:860px;max-height:32em;overflow:auto;white-space:pre-wrap"><?php echo esc_html( (string) $row->body ); ?></pre>
+		<?php endif; ?>
 		<?php
 	}
 

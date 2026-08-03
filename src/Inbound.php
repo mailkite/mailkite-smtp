@@ -254,6 +254,14 @@ final class Inbound {
 		}
 
 		if ( Options::get( 'log_enabled' ) ) {
+			// Store the readable body so incoming mail can be READ from the Email Log
+			// (text preferred, stripped HTML as fallback), capped so a huge message
+			// can't bloat the table.
+			$body = (string) ( $message['text'] ?? '' );
+			if ( '' === $body && ! empty( $message['html'] ) ) {
+				$body = wp_strip_all_tags( (string) $message['html'] );
+			}
+
 			global $wpdb;
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
 			$wpdb->insert(
@@ -262,11 +270,11 @@ final class Inbound {
 					'created_at' => current_time( 'mysql', true ),
 					'mail_to'    => implode( ', ', (array) ( $message['to'] ?? [] ) ),
 					'subject'    => sprintf( '%s (from %s)', $subject, $from ),
-					'body'       => null,
+					'body'       => mb_substr( $body, 0, 65536 ),
 					'headers'    => null,
 					'mailer'     => 'inbound',
 					'status'     => 'received',
-					'redacted'   => 1,
+					'redacted'   => 0,
 				]
 			);
 		}
