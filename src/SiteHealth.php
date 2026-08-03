@@ -41,8 +41,18 @@ final class SiteHealth {
 	 * @return array<string, mixed>
 	 */
 	public function test_mailer(): array {
-		$mailer = (string) Options::get( 'mailer' );
-		$good   = 'php' !== $mailer;
+		$s      = Options::all();
+		$mailer = (string) $s['mailer'];
+		// "Configured" means a mailer that can actually deliver: MailKite with a key,
+		// SMTP with a host, or a BYO provider with its credential present.
+		$good = match ( $mailer ) {
+			'mailkite' => '' !== (string) $s['api_key'],
+			'smtp'     => '' !== (string) $s['smtp_host'],
+			'sendgrid' => '' !== (string) $s['sendgrid_key'],
+			'brevo'    => '' !== (string) $s['brevo_key'],
+			'mailgun'  => '' !== (string) $s['mailgun_key'],
+			default    => false,
+		};
 
 		return [
 			'label'       => $good

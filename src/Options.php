@@ -18,7 +18,7 @@ final class Options {
 	public const OPTION = 'mailkite_smtp_settings';
 
 	private const DEFAULTS = [
-		'mailer'           => 'php', // php | smtp | mailkite.
+		'mailer'           => 'mailkite', // Recommended default; falls back to PHP mail until a key is connected (fallback_enabled).
 		'api_key'          => '',
 		'api_base'         => 'https://api.mailkite.dev',
 		'force_from_email' => '',

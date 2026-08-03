@@ -461,8 +461,9 @@ final class Menu {
 			<?php
 		endif;
 
-		$detected = \MailKite\Smtp\Migrate\Importer::detect();
-		if ( $detected && 'php' === $mailer ) :
+		$detected     = \MailKite\Smtp\Migrate\Importer::detect();
+		$unconfigured = ! $key_set && '' === (string) $s['smtp_host'];
+		if ( $detected && $unconfigured ) :
 			?>
 			<div class="notice notice-info" style="padding:12px">
 				<p style="margin-top:0"><strong><?php esc_html_e( 'Import your existing SMTP settings', 'mailkite-smtp' ); ?></strong> —
