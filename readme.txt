@@ -72,7 +72,11 @@ Yes — the plugin intercepts `wp_mail()`, which they all use.
 
 = How do I receive email into WordPress? =
 
-Enable the Inbound tab, copy the webhook URL into your MailKite domain settings, and handle `mailkite_smtp_inbound` in your code — or just set a forwarding address.
+Open the Inbound tab, pick your domain, and press "Turn on inbound" — the plugin installs the webhook and its signature verification on your MailKite account for you. Nothing to copy, paste, or configure by hand. Then read arriving mail in the Email Log, handle `mailkite_smtp_inbound` in your code, or set a forwarding address.
+
+= Can I reply to email from WordPress? =
+
+Yes. Received messages get a Reply action in the Email Log. The reply goes out as the address the message was delivered to — your own verified domain, never a spoofed sender — and it threads correctly, so the conversation stays together in the recipient's mail client. Both halves show under Conversation on the message.
 
 == Screenshots ==
 
