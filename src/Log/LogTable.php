@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class LogTable {
 
-	public const DB_VERSION        = '1';
+	public const DB_VERSION        = '2';
 	public const DB_VERSION_OPTION = 'mailkite_smtp_db_version';
 
 	/**
@@ -50,13 +50,27 @@ final class LogTable {
 				status VARCHAR(10) NOT NULL DEFAULT 'pending',
 				error TEXT NULL,
 				redacted TINYINT(1) NOT NULL DEFAULT 0,
+				from_addr TEXT NULL,
+				thread_id VARCHAR(255) NULL,
+				message_id VARCHAR(255) NULL,
 				PRIMARY KEY  (id),
 				KEY created_at (created_at),
-				KEY status (status)
+				KEY status (status),
+				KEY thread_id (thread_id)
 			) {$charset};"
 		);
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION, false );
+	}
+
+	/**
+	 * Run install() when the stored schema version is behind (plugin updated in place,
+	 * where the activation hook never fires). dbDelta adds the missing columns.
+	 */
+	public static function maybe_upgrade(): void {
+		if ( (string) get_option( self::DB_VERSION_OPTION ) !== self::DB_VERSION ) {
+			self::install();
+		}
 	}
 
 	/**

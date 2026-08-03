@@ -290,12 +290,18 @@ final class Inbound {
 				[
 					'created_at' => current_time( 'mysql', true ),
 					'mail_to'    => $to_disp,
-					'subject'    => sprintf( '%s (from %s)', $subject, $from ),
+					'from_addr'  => $from,
+					'subject'    => $subject,
 					'body'       => mb_substr( $body, 0, 65536 ),
 					'headers'    => null,
 					'mailer'     => 'inbound',
 					'status'     => 'received',
 					'redacted'   => 0,
+					// threadId is the conversation root MailKite already resolved from
+					// In-Reply-To/References (falling back to this message's own id). Storing it
+					// is what lets a reply thread correctly and the log group a conversation.
+					'thread_id'  => (string) ( $message['threadId'] ?? $message['id'] ?? '' ),
+					'message_id' => (string) ( $message['id'] ?? '' ),
 				]
 			);
 		}

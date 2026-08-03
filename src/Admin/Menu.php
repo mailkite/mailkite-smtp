@@ -28,6 +28,7 @@ final class Menu {
 		add_action( 'admin_post_mailkite_smtp_save', [ $this, 'handle_save' ] );
 		add_action( 'admin_post_mailkite_smtp_test', [ $this, 'handle_test' ] );
 		add_action( 'admin_post_mailkite_smtp_resend', [ $this, 'handle_resend' ] );
+		add_action( 'admin_post_mailkite_smtp_reply', [ $this, 'handle_reply' ] );
 		add_action( 'admin_post_mailkite_smtp_import', [ $this, 'handle_import' ] );
 		add_action( 'admin_post_mailkite_smtp_export', [ $this, 'handle_export' ] );
 		add_action( 'admin_post_mailkite_smtp_rotate_inbound', [ $this, 'handle_rotate_inbound' ] );
@@ -308,6 +309,42 @@ final class Menu {
 	}
 
 	/**
+	 * Reply to a received message (admin-post). Threads via In-Reply-To.
+	 */
+	public function handle_reply(): void {
+		$this->guard( 'mailkite_smtp_reply' );
+
+		global $wpdb;
+		$id   = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0;
+		$body = isset( $_POST['body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['body'] ) ) : '';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) );
+
+		if ( ! $row || 'inbound' !== $row->mailer || ! $row->from_addr || '' === $body ) {
+			$this->redirect( 'log', 'reply_failed' );
+		}
+
+		$from    = $this->reply_from_address( (string) $row->mail_to );
+		$subject = (string) $row->subject;
+		$headers = [ 'From: ' . $from ];
+		if ( ! empty( $row->thread_id ) ) {
+			// MailKite threads on this value (its resolved conversation root); the mailer
+			// promotes it to the API's inReplyTo, and other clients read the header.
+			$headers[] = 'In-Reply-To: ' . $row->thread_id;
+			$headers[] = 'References: ' . $row->thread_id;
+		}
+
+		$sent = wp_mail(
+			(string) $row->from_addr,
+			str_starts_with( strtolower( $subject ), 're:' ) ? $subject : 'Re: ' . $subject,
+			$body,
+			$headers
+		);
+
+		$this->redirect( 'log', $sent ? 'replied' : 'reply_failed' );
+	}
+
+	/**
 	 * Nonce + capability guard for admin-post handlers.
 	 *
 	 * @param string $action Nonce action.
@@ -400,6 +437,8 @@ final class Menu {
 			'test_failed'   => [ 'error', __( 'Test email failed — see the Email Log tab for the error.', 'mailkite-smtp' ) ],
 			'test_invalid'  => [ 'error', __( 'Enter a valid recipient address.', 'mailkite-smtp' ) ],
 			'resent'        => [ 'success', __( 'Email resent.', 'mailkite-smtp' ) ],
+			'replied'       => [ 'success', __( 'Reply sent — it appears in the log as an outgoing message in the same conversation.', 'mailkite-smtp' ) ],
+			'reply_failed'  => [ 'error', __( 'The reply could not be sent — check the log entry for the error.', 'mailkite-smtp' ) ],
 			'resend_failed' => [ 'error', __( 'Could not resend (redacted or failed).', 'mailkite-smtp' ) ],
 		];
 		if ( isset( $map[ $code ] ) ) {
@@ -887,24 +926,41 @@ final class Menu {
 			endif;
 		endif;
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
-			<input type="hidden" name="action" value="mailkite_smtp_save" />
-			<input type="hidden" name="_back_tab" value="inbound" />
-			<?php wp_nonce_field( 'mailkite_smtp_save' ); ?>
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><label for="mk-inb-fwd"><?php esc_html_e( 'Forward a copy to', 'mailkite-smtp' ); ?></label></th>
-					<td><input type="email" class="regular-text" id="mk-inb-fwd" name="inbound_forward" value="<?php echo esc_attr( (string) $s['inbound_forward'] ); ?>" />
-					<p class="description"><?php esc_html_e( 'Optional. Each inbound email is also sent to this address.', 'mailkite-smtp' ); ?></p></td>
-				</tr>
-			</table>
-			<?php submit_button( __( 'Save', 'mailkite-smtp' ) ); ?>
-		</form>
-		<h2><?php esc_html_e( 'For developers', 'mailkite-smtp' ); ?></h2>
-		<pre style="background:#f6f7f7;padding:12px;max-width:760px;overflow:auto">add_action( 'mailkite_smtp_inbound', function ( array $message, array $payload ) {
+		<h2 style="margin-top:1.5em"><?php esc_html_e( 'What inbound email gives you', 'mailkite-smtp' ); ?></h2>
+		<div style="display:flex;gap:16px;flex-wrap:wrap;max-width:1100px">
+
+			<div class="card" style="flex:1 1 300px;margin:0;padding:16px;max-width:none">
+				<h3 style="margin-top:0">1. <?php esc_html_e( 'Turn an email into a WordPress action', 'mailkite-smtp' ); ?></h3>
+				<p><?php esc_html_e( 'Every message that arrives fires a hook your plugins and theme can act on: open a support ticket, attach a customer’s reply to their WooCommerce order, post to a forum, or hand it to an AI agent. No other SMTP plugin can do this.', 'mailkite-smtp' ); ?></p>
+				<pre style="background:#f6f7f7;padding:12px;overflow:auto;font-size:12px">add_action( 'mailkite_smtp_inbound', function ( $message, $payload ) {
 	// $message: from, to, subject, text, html, attachments …
-	error_log( 'Email from ' . $message['from'] . ': ' . $message['subject'] );
+	error_log( 'Email from ' . $message['from'] );
 }, 10, 2 );</pre>
+			</div>
+
+			<div class="card" style="flex:1 1 300px;margin:0;padding:16px;max-width:none">
+				<h3 style="margin-top:0">2. <?php esc_html_e( 'Nothing vanishes', 'mailkite-smtp' ); ?></h3>
+				<p><?php esc_html_e( 'Your site sends from a no-reply address and people reply anyway. Bounces and out-of-office notices come back too. Without inbound those are lost silently — with it they land in the Email Log, right next to the message they answer.', 'mailkite-smtp' ); ?></p>
+				<p><a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log' ], admin_url( 'admin.php' ) ) ); ?>" class="button button-small"><?php esc_html_e( 'Open the Email Log', 'mailkite-smtp' ); ?></a></p>
+			</div>
+
+			<div class="card" style="flex:1 1 300px;margin:0;padding:16px;max-width:none">
+				<h3 style="margin-top:0">3. <?php esc_html_e( 'Or just forward it to your inbox', 'mailkite-smtp' ); ?></h3>
+				<p><?php esc_html_e( 'No code, no new place to check: send a copy of everything that arrives to an address you already read, such as your Gmail.', 'mailkite-smtp' ); ?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="mailkite_smtp_save" />
+					<input type="hidden" name="_back_tab" value="inbound" />
+					<?php wp_nonce_field( 'mailkite_smtp_save' ); ?>
+					<p>
+						<label for="mk-inb-fwd" class="screen-reader-text"><?php esc_html_e( 'Forward a copy to', 'mailkite-smtp' ); ?></label>
+						<input type="email" class="regular-text" id="mk-inb-fwd" name="inbound_forward" style="max-width:100%"
+							value="<?php echo esc_attr( (string) $s['inbound_forward'] ); ?>" placeholder="you@example.com" />
+					</p>
+					<button type="submit" class="button"><?php esc_html_e( 'Save forwarding address', 'mailkite-smtp' ); ?></button>
+				</form>
+			</div>
+
+		</div>
 		<?php
 	}
 
@@ -977,7 +1033,7 @@ final class Menu {
 
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id, created_at, mail_to, subject, mailer, status, error, redacted, body IS NULL AS no_body FROM %i ORDER BY id DESC LIMIT 100', LogTable::name() ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id, created_at, mail_to, from_addr, subject, mailer, status, error, redacted, body IS NULL AS no_body FROM %i ORDER BY id DESC LIMIT 100', LogTable::name() ) );
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
 			<input type="hidden" name="action" value="mailkite_smtp_export" />
@@ -987,7 +1043,7 @@ final class Menu {
 		<table class="widefat striped" style="margin-top:1em">
 			<thead><tr>
 				<th><?php esc_html_e( 'Date (UTC)', 'mailkite-smtp' ); ?></th>
-				<th><?php esc_html_e( 'To', 'mailkite-smtp' ); ?></th>
+				<th><?php esc_html_e( 'From / To', 'mailkite-smtp' ); ?></th>
 				<th><?php esc_html_e( 'Subject', 'mailkite-smtp' ); ?></th>
 				<th><?php esc_html_e( 'Mailer', 'mailkite-smtp' ); ?></th>
 				<th><?php esc_html_e( 'Status', 'mailkite-smtp' ); ?></th>
@@ -1000,7 +1056,13 @@ final class Menu {
 			<?php foreach ( (array) $rows as $row ) : ?>
 				<tr>
 					<td><?php echo esc_html( $row->created_at ); ?></td>
-					<td><?php echo esc_html( $row->mail_to ); ?></td>
+					<td>
+						<?php if ( 'inbound' === $row->mailer && $row->from_addr ) : ?>
+							<span title="<?php esc_attr_e( 'Sender', 'mailkite-smtp' ); ?>">&larr; <?php echo esc_html( (string) $row->from_addr ); ?></span>
+						<?php else : ?>
+							<?php echo esc_html( $row->mail_to ); ?>
+						<?php endif; ?>
+					</td>
 					<td>
 						<a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $row->id ], admin_url( 'admin.php' ) ) ); ?>">
 							<?php echo esc_html( $row->subject ); ?>
@@ -1020,6 +1082,9 @@ final class Menu {
 						<?php endif; ?>
 					</td>
 					<td>
+						<?php if ( 'inbound' === $row->mailer && $row->from_addr ) : ?>
+							<a class="button button-small" href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $row->id, 'reply' => 1 ], admin_url( 'admin.php' ) ) ); ?>#reply"><?php esc_html_e( 'Reply', 'mailkite-smtp' ); ?></a>
+						<?php endif; ?>
 						<?php if ( ! $row->no_body && 'inbound' !== $row->mailer ) : ?>
 							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 								<input type="hidden" name="action" value="mailkite_smtp_resend" />
@@ -1060,6 +1125,9 @@ final class Menu {
 				<tr><td style="width:9em"><strong><?php esc_html_e( 'Direction', 'mailkite-smtp' ); ?></strong></td>
 					<td><?php echo 'inbound' === $row->mailer ? esc_html__( 'Received (inbound)', 'mailkite-smtp' ) : esc_html__( 'Sent (outbound)', 'mailkite-smtp' ) . ' — ' . esc_html( $row->mailer ); ?></td></tr>
 				<tr><td><strong><?php esc_html_e( 'Date (UTC)', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->created_at ); ?></td></tr>
+				<?php if ( $row->from_addr ) : ?>
+					<tr><td><strong><?php esc_html_e( 'From', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( (string) $row->from_addr ); ?></td></tr>
+				<?php endif; ?>
 				<tr><td><strong><?php esc_html_e( 'To', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->mail_to ); ?></td></tr>
 				<tr><td><strong><?php esc_html_e( 'Subject', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->subject ); ?></td></tr>
 				<tr><td><strong><?php esc_html_e( 'Status', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->status ); ?></td></tr>
@@ -1076,7 +1144,82 @@ final class Menu {
 		<?php else : ?>
 			<pre style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px;max-width:860px;max-height:32em;overflow:auto;white-space:pre-wrap"><?php echo esc_html( (string) $row->body ); ?></pre>
 		<?php endif; ?>
+
 		<?php
+		// The rest of this conversation. thread_id is MailKite's resolved conversation
+		// root, so a reply we sent and the message it answers share one — both sides of
+		// the exchange show here, oldest first.
+		$thread = [];
+		if ( ! empty( $row->thread_id ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
+			$thread = (array) $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT id, created_at, mail_to, from_addr, subject, mailer, status FROM %i WHERE thread_id = %s AND id <> %d ORDER BY id ASC LIMIT 50',
+					LogTable::name(),
+					(string) $row->thread_id,
+					(int) $row->id
+				)
+			);
+		}
+		if ( $thread ) :
+			?>
+			<h2><?php esc_html_e( 'Conversation', 'mailkite-smtp' ); ?></h2>
+			<table class="widefat striped" style="max-width:860px">
+				<tbody>
+				<?php foreach ( $thread as $t ) : ?>
+					<tr>
+						<td style="width:11em"><?php echo esc_html( $t->created_at ); ?></td>
+						<td style="width:6em"><?php echo 'inbound' === $t->mailer ? esc_html__( 'received', 'mailkite-smtp' ) : esc_html__( 'sent', 'mailkite-smtp' ); ?></td>
+						<td><?php echo esc_html( 'inbound' === $t->mailer ? (string) $t->from_addr : (string) $t->mail_to ); ?></td>
+						<td><a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $t->id ], admin_url( 'admin.php' ) ) ); ?>"><?php echo esc_html( (string) $t->subject ); ?></a></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			<?php
+		endif;
+
+		// Replying is only meaningful for mail we received, and only when we know who
+		// sent it. The From address is forced to the address the message was delivered
+		// TO — this site's own verified domain — never a user-chosen value.
+		if ( 'inbound' === $row->mailer && $row->from_addr ) :
+			$reply_from = $this->reply_from_address( (string) $row->mail_to );
+			?>
+			<h2 id="reply"><?php esc_html_e( 'Reply', 'mailkite-smtp' ); ?></h2>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width:860px">
+				<input type="hidden" name="action" value="mailkite_smtp_reply" />
+				<input type="hidden" name="log_id" value="<?php echo esc_attr( (string) $row->id ); ?>" />
+				<?php wp_nonce_field( 'mailkite_smtp_reply' ); ?>
+				<p class="description">
+					<?php
+					printf(
+						/* translators: 1: from address, 2: recipient address. */
+						esc_html__( 'From %1$s to %2$s', 'mailkite-smtp' ),
+						'<code>' . esc_html( $reply_from ) . '</code>',
+						'<code>' . esc_html( (string) $row->from_addr ) . '</code>'
+					);
+					?>
+				</p>
+				<textarea name="body" rows="6" class="large-text" required></textarea>
+				<p><button type="submit" class="button button-primary"><?php esc_html_e( 'Send reply', 'mailkite-smtp' ); ?></button></p>
+			</form>
+			<?php
+		endif;
+	}
+
+	/**
+	 * The address a reply goes out as: the address the inbound message was delivered
+	 * to (this site's own domain), falling back to the forced from-address.
+	 *
+	 * @param string $delivered_to The stored recipient value, possibly "Name <addr>, addr2".
+	 */
+	private function reply_from_address( string $delivered_to ): string {
+		$first = trim( (string) explode( ',', $delivered_to )[0] );
+		if ( preg_match( '/<([^>]+)>/', $first, $m ) ) {
+			$first = trim( $m[1] );
+		}
+
+		return is_email( $first ) ? $first : (string) Options::get( 'force_from_email' );
 	}
 
 	/**

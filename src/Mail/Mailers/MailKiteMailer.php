@@ -55,8 +55,15 @@ final class MailKiteMailer implements MailerInterface {
 		if ( $email->reply_to ) {
 			$body['replyTo'] = $email->reply_to;
 		}
-		if ( $email->headers ) {
-			$body['headers'] = $email->headers;
+		$headers = $email->headers;
+		if ( isset( $headers['in-reply-to'] ) ) {
+			// The API threads on inReplyTo; passing it only as a raw header would reach the
+			// recipient's client but leave the conversation unlinked on MailKite's side.
+			$body['inReplyTo'] = $headers['in-reply-to'];
+			unset( $headers['in-reply-to'] );
+		}
+		if ( $headers ) {
+			$body['headers'] = $headers;
 		}
 
 		foreach ( [

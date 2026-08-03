@@ -60,6 +60,19 @@ final class Logger {
 			$to = explode( ',', $to );
 		}
 
+		// A reply carries In-Reply-To; that value is the thread root, so an outgoing
+		// answer lands in the same conversation as the message it answers.
+		$raw_headers = $args['headers'] ?? [];
+		if ( is_string( $raw_headers ) ) {
+			$raw_headers = explode( "\n", str_replace( "\r\n", "\n", $raw_headers ) );
+		}
+		$thread_id = '';
+		foreach ( (array) $raw_headers as $header ) {
+			if ( is_string( $header ) && preg_match( '/^\s*in-reply-to\s*:\s*(.+)$/i', $header, $m ) ) {
+				$thread_id = trim( $m[1] );
+			}
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom log table.
 		$wpdb->insert(
 			LogTable::name(),
@@ -73,6 +86,7 @@ final class Logger {
 				'mailer'      => (string) Options::get( 'mailer' ),
 				'status'      => 'pending',
 				'redacted'    => $redact ? 1 : 0,
+				'thread_id'   => $thread_id,
 			]
 		);
 		$this->current_id = (int) $wpdb->insert_id;

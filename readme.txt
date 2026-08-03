@@ -4,7 +4,7 @@ Tags: smtp, email, email log, deliverability, wp mail
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,7 +38,11 @@ WordPress sends email through PHP `mail()` by default — unauthenticated, often
 
 = Receive email in WordPress (unique) =
 
-Enable the inbound webhook, point a MailKite route at it, and every incoming email fires `do_action( 'mailkite_smtp_inbound', $message )` — build reply-to-comment, email-to-ticket, approve-by-reply. Optionally forward a copy to any inbox.
+No other SMTP plugin can receive. Turn inbound on (one click — the webhook and its signature verification are installed on your MailKite domain automatically) and you get three things:
+
+1. **Turn an email into a WordPress action.** Every message fires `do_action( 'mailkite_smtp_inbound', $message, $payload )`, so your plugins and theme can act on it: open a support ticket, attach a customer's reply to their WooCommerce order, post to a forum, hand it to an AI agent.
+2. **Nothing vanishes.** Your site sends from a no-reply address and people reply anyway; bounces and out-of-office notices come back too. Without inbound those are lost silently — with it they land in the Email Log next to the message they answer, and you can **reply from WordPress**, in-thread, as your own domain.
+3. **Or just forward it.** No code: send a copy of everything to an address you already read.
 
 = For professionals =
 
@@ -78,6 +82,12 @@ Enable the Inbound tab, copy the webhook URL into your MailKite domain settings,
 4. Domain Health — SPF/DMARC checks with weekly drift alerts.
 
 == Changelog ==
+
+= 0.3.0 =
+* Inbound: reply to received mail from the Email Log, threaded (From is forced to the address it was delivered to).
+* Log stores the real sender, conversation id and message id; conversation view groups both sides of an exchange.
+* Inbound tab explains what inbound is for, with the developer hook, log link and forwarding in one place.
+* User mailboxes: give WordPress users real addresses (IMAP + API), with an Inbox screen and `[mailkite_inbox]`.
 
 = 0.2.0 =
 * SendGrid, Brevo, and Mailgun mailers (bring your own key).
