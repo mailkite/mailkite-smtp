@@ -91,9 +91,13 @@ All phases built and verified on WordPress Playground except the items in
       committed — harmless)
 
 ## Later milestones
-- [ ] **User Mailboxes — real inbox in WordPress** (plan: [INBOX-PLAN.md](INBOX-PLAN.md)):
-      per-user addresses on the site's domain (off by default, reserved-address list),
-      IMAP+API credentials screen, in-WP inbox. Platform asks tracked in that doc §6.
+- [x] **User Mailboxes — real inbox in WordPress** (2026-08-03, plan:
+      [INBOX-PLAN.md](INBOX-PLAN.md)): Mailboxes settings tab (all off by default,
+      role gate, reserved list, per-user send cap), per-user address claim minting a
+      scoped app password (imap+api), credentials screen with mail-app settings,
+      Inbox screen in wp-admin + `[mailkite_inbox]` shortcode, message reader, reply
+      as your own address. Verified end to end on a real WordPress against production.
+      Left for later: folders/search, unread badge, attachment download, multisite.
 - [x] **In-admin signup + OAuth connect shipped 2026-08-02** (PHP, ahead of the React
       wizard): "Create free account" (register-by-email via POST /api/v1/provision —
       key stored instantly, channel=wordpress-plugin + ref attribution, sending blocked
