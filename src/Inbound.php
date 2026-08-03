@@ -52,7 +52,22 @@ final class Inbound {
 			return '';
 		}
 
-		return add_query_arg( 'token', $secret, rest_url( 'mailkite-smtp/v1/inbound' ) );
+		$endpoint = rest_url( 'mailkite-smtp/v1/inbound' );
+
+		// Local/dev sites aren't reachable from MailKite's servers. Define
+		// MAILKITE_SMTP_PUBLIC_URL (wp-config) as the site's public origin — e.g. a
+		// cloudflared/ngrok tunnel — and the ADVERTISED webhook URL is rebased onto it
+		// (the receiving endpoint is unchanged; the tunnel forwards to this site).
+		if ( defined( 'MAILKITE_SMTP_PUBLIC_URL' ) && MAILKITE_SMTP_PUBLIC_URL ) {
+			$home = untrailingslashit( home_url() );
+			if ( str_starts_with( $endpoint, $home ) ) {
+				// Swap the origin, keep path AND query (plain permalinks put the REST
+				// route in ?rest_route=).
+				$endpoint = untrailingslashit( MAILKITE_SMTP_PUBLIC_URL ) . substr( $endpoint, strlen( $home ) );
+			}
+		}
+
+		return add_query_arg( 'token', $secret, $endpoint );
 	}
 
 	/**
