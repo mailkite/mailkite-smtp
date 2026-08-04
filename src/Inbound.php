@@ -243,7 +243,7 @@ final class Inbound {
 		}
 
 		// The email.received event IS the message (id/from/to/subject/text/html…);
-		// accept a `message`-nested variant too so manual tests keep working.
+		// accept a `message`-nested variant too so manual tests keep working..
 		$message = is_array( $payload['message'] ?? null ) ? $payload['message'] : $payload;
 
 		// Addresses arrive structured ({address, name} / arrays of those) per the

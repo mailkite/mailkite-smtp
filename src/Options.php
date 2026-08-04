@@ -18,39 +18,39 @@ final class Options {
 	public const OPTION = 'mailkite_smtp_settings';
 
 	private const DEFAULTS = [
-		'mailer'           => 'mailkite', // Recommended default; falls back to PHP mail until a key is connected (fallback_enabled).
-		'api_key'          => '',
-		'api_base'         => 'https://api.mailkite.dev',
-		'force_from_email' => '',
-		'force_from_name'  => '',
-		'smtp_host'        => '',
-		'smtp_port'        => 587,
-		'smtp_encryption'  => 'tls', // none | ssl | tls.
-		'smtp_auth'        => true,
-		'smtp_username'    => '',
-		'smtp_password'    => '',
-		'log_enabled'      => true,
-		'log_redact_auth'  => true,
-		'log_retention'    => 30,
-		'fallback_enabled' => true,
-		'alerts_enabled'   => false,
-		'alert_email'      => '',
-		'alert_webhook'    => '',
-		'sendgrid_key'     => '',
-		'brevo_key'        => '',
-		'mailgun_key'      => '',
-		'mailgun_domain'   => '',
-		'mailgun_region'   => 'us',
-		'track_opens'      => 'default', // default | on | off (MailKite sends only).
-		'track_clicks'     => 'default',
-		'routing_rules'    => [], // [ [ 'field' => subject|to, 'match' => str, 'mailer' => id ], ... ].
-		'inbound_enabled'  => false,
-		'inbound_secret'   => '',
+		'mailer'              => 'mailkite', // Recommended default; falls back to PHP mail until a key is connected (fallback_enabled).
+		'api_key'             => '',
+		'api_base'            => 'https://api.mailkite.dev',
+		'force_from_email'    => '',
+		'force_from_name'     => '',
+		'smtp_host'           => '',
+		'smtp_port'           => 587,
+		'smtp_encryption'     => 'tls', // none | ssl | tls.
+		'smtp_auth'           => true,
+		'smtp_username'       => '',
+		'smtp_password'       => '',
+		'log_enabled'         => true,
+		'log_redact_auth'     => true,
+		'log_retention'       => 30,
+		'fallback_enabled'    => true,
+		'alerts_enabled'      => false,
+		'alert_email'         => '',
+		'alert_webhook'       => '',
+		'sendgrid_key'        => '',
+		'brevo_key'           => '',
+		'mailgun_key'         => '',
+		'mailgun_domain'      => '',
+		'mailgun_region'      => 'us',
+		'track_opens'         => 'default', // default | on | off (MailKite sends only).
+		'track_clicks'        => 'default',
+		'routing_rules'       => [], // [ [ 'field' => subject|to, 'match' => str, 'mailer' => id ], ... ].
+		'inbound_enabled'     => false,
+		'inbound_secret'      => '',
 		'inbound_hmac_secret' => '', // whsec_… fetched automatically at connect; enables signature verification.
-		'inbound_domain'   => '',   // display name of the connected MailKite domain.
-		'inbound_domain_id' => '',  // dom_… the webhook is installed on.
-		'inbound_forward'  => '',
-		'summary_enabled'  => false,
+		'inbound_domain'      => '',   // display name of the connected MailKite domain.
+		'inbound_domain_id'   => '',  // dom_… the webhook is installed on.
+		'inbound_forward'     => '',
+		'summary_enabled'     => false,
 	];
 
 

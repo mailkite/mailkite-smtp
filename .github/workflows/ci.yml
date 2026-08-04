@@ -30,7 +30,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Check what users actually receive, not the repo. The build directory is the
+      # plugin minus everything .distignore excludes (dev tooling, plans, CI config) —
+      # scanning the repo instead reports the tooling itself as plugin defects.
+      - name: Build the distributable
+        run: |
+          mkdir -p dist/mailkite-smtp
+          rsync -a --exclude-from=.distignore ./ dist/mailkite-smtp/
+          rm -rf dist/mailkite-smtp/dist
+          ls -a dist/mailkite-smtp
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
-          build-dir: '.'
+          build-dir: './dist/mailkite-smtp'

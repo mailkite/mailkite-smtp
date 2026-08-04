@@ -409,26 +409,26 @@ final class Menu {
 			return;
 		}
 		$map = [
-			'saved'         => [ 'success', __( 'Settings saved.', 'mailkite-smtp' ) ],
-			'provisioned'   => [ 'success', __( 'MailKite account created and connected! Check your inbox and click the verification link — sending stays blocked until the email is verified.', 'mailkite-smtp' ) ],
-			'connected'     => [ 'success', __( 'MailKite account connected.', 'mailkite-smtp' ) ],
-			'account_exists' => [ 'error', __( 'That email already has a MailKite account — use "Connect existing account" below, or paste its API key.', 'mailkite-smtp' ) ],
+			'saved'             => [ 'success', __( 'Settings saved.', 'mailkite-smtp' ) ],
+			'provisioned'       => [ 'success', __( 'MailKite account created and connected! Check your inbox and click the verification link — sending stays blocked until the email is verified.', 'mailkite-smtp' ) ],
+			'connected'         => [ 'success', __( 'MailKite account connected.', 'mailkite-smtp' ) ],
+			'account_exists'    => [ 'error', __( 'That email already has a MailKite account — use "Connect existing account" below, or paste its API key.', 'mailkite-smtp' ) ],
 			'provision_invalid' => [ 'error', __( 'Enter a valid email address.', 'mailkite-smtp' ) ],
-			'provision_failed' => [ 'error', __( 'Could not create the account — try again in a minute.', 'mailkite-smtp' ) ],
-			'rate_limited'  => [ 'error', __( 'Too many attempts — try again later.', 'mailkite-smtp' ) ],
-			'oauth_failed'  => [ 'error', __( 'Connecting to MailKite failed — try again, or paste an API key instead.', 'mailkite-smtp' ) ],
-			'inbound_on'    => [ 'success', __( 'Inbound is on — the webhook and signature verification were set up on your MailKite domain automatically.', 'mailkite-smtp' ) ],
-			'inbound_off'   => [ 'success', __( 'Inbound turned off and the webhook removed.', 'mailkite-smtp' ) ],
-			'inbound_failed' => [ 'error', __( 'Could not set up the webhook on MailKite — check the domain is verified and try again.', 'mailkite-smtp' ) ],
-			'imported'      => [ 'success', __( 'Settings imported — review below, then send a test email.', 'mailkite-smtp' ) ],
-			'import_failed' => [ 'error', __( 'Nothing importable found (only generic-SMTP configurations can be imported).', 'mailkite-smtp' ) ],
-			'test_sent'     => [ 'success', __( 'Test email sent — check the inbox (and the Email Log tab).', 'mailkite-smtp' ) ],
-			'test_failed'   => [ 'error', __( 'Test email failed — see the Email Log tab for the error.', 'mailkite-smtp' ) ],
-			'test_invalid'  => [ 'error', __( 'Enter a valid recipient address.', 'mailkite-smtp' ) ],
-			'resent'        => [ 'success', __( 'Email resent.', 'mailkite-smtp' ) ],
-			'replied'       => [ 'success', __( 'Reply sent — it appears in the log as an outgoing message in the same conversation.', 'mailkite-smtp' ) ],
-			'reply_failed'  => [ 'error', __( 'The reply could not be sent — check the log entry for the error.', 'mailkite-smtp' ) ],
-			'resend_failed' => [ 'error', __( 'Could not resend (redacted or failed).', 'mailkite-smtp' ) ],
+			'provision_failed'  => [ 'error', __( 'Could not create the account — try again in a minute.', 'mailkite-smtp' ) ],
+			'rate_limited'      => [ 'error', __( 'Too many attempts — try again later.', 'mailkite-smtp' ) ],
+			'oauth_failed'      => [ 'error', __( 'Connecting to MailKite failed — try again, or paste an API key instead.', 'mailkite-smtp' ) ],
+			'inbound_on'        => [ 'success', __( 'Inbound is on — the webhook and signature verification were set up on your MailKite domain automatically.', 'mailkite-smtp' ) ],
+			'inbound_off'       => [ 'success', __( 'Inbound turned off and the webhook removed.', 'mailkite-smtp' ) ],
+			'inbound_failed'    => [ 'error', __( 'Could not set up the webhook on MailKite — check the domain is verified and try again.', 'mailkite-smtp' ) ],
+			'imported'          => [ 'success', __( 'Settings imported — review below, then send a test email.', 'mailkite-smtp' ) ],
+			'import_failed'     => [ 'error', __( 'Nothing importable found (only generic-SMTP configurations can be imported).', 'mailkite-smtp' ) ],
+			'test_sent'         => [ 'success', __( 'Test email sent — check the inbox (and the Email Log tab).', 'mailkite-smtp' ) ],
+			'test_failed'       => [ 'error', __( 'Test email failed — see the Email Log tab for the error.', 'mailkite-smtp' ) ],
+			'test_invalid'      => [ 'error', __( 'Enter a valid recipient address.', 'mailkite-smtp' ) ],
+			'resent'            => [ 'success', __( 'Email resent.', 'mailkite-smtp' ) ],
+			'replied'           => [ 'success', __( 'Reply sent — it appears in the log as an outgoing message in the same conversation.', 'mailkite-smtp' ) ],
+			'reply_failed'      => [ 'error', __( 'The reply could not be sent — check the log entry for the error.', 'mailkite-smtp' ) ],
+			'resend_failed'     => [ 'error', __( 'Could not resend (redacted or failed).', 'mailkite-smtp' ) ],
 		];
 		if ( isset( $map[ $code ] ) ) {
 			printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $map[ $code ][0] ), esc_html( $map[ $code ][1] ) );
@@ -930,7 +930,19 @@ final class Menu {
 			<div class="card" style="flex:1 1 300px;margin:0;padding:16px;max-width:none">
 				<h3 style="margin-top:0">2. <?php esc_html_e( 'Nothing vanishes', 'mailkite-smtp' ); ?></h3>
 				<p><?php esc_html_e( 'Your site sends from a no-reply address and people reply anyway. Bounces and out-of-office notices come back too. Without inbound those are lost silently — with it they land in the Email Log, right next to the message they answer.', 'mailkite-smtp' ); ?></p>
-				<p><a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log' ], admin_url( 'admin.php' ) ) ); ?>" class="button button-small"><?php esc_html_e( 'Open the Email Log', 'mailkite-smtp' ); ?></a></p>
+				<p><a href="
+				<?php
+				echo esc_url(
+					add_query_arg(
+						[
+							'page' => self::SLUG,
+							'tab'  => 'log',
+						],
+						admin_url( 'admin.php' )
+					)
+				);
+				?>
+							" class="button button-small"><?php esc_html_e( 'Open the Email Log', 'mailkite-smtp' ); ?></a></p>
 			</div>
 
 			<div class="card" style="flex:1 1 300px;margin:0;padding:16px;max-width:none">
@@ -1053,7 +1065,20 @@ final class Menu {
 						<?php endif; ?>
 					</td>
 					<td>
-						<a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $row->id ], admin_url( 'admin.php' ) ) ); ?>">
+						<a href="
+						<?php
+						echo esc_url(
+							add_query_arg(
+								[
+									'page' => self::SLUG,
+									'tab'  => 'log',
+									'view' => (int) $row->id,
+								],
+								admin_url( 'admin.php' )
+							)
+						);
+						?>
+									">
 							<?php echo esc_html( $row->subject ); ?>
 						</a>
 						<?php if ( $row->redacted ) : ?>
@@ -1072,7 +1097,21 @@ final class Menu {
 					</td>
 					<td>
 						<?php if ( 'inbound' === $row->mailer && $row->from_addr ) : ?>
-							<a class="button button-small" href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $row->id, 'reply' => 1 ], admin_url( 'admin.php' ) ) ); ?>#reply"><?php esc_html_e( 'Reply', 'mailkite-smtp' ); ?></a>
+							<a class="button button-small" href="
+							<?php
+							echo esc_url(
+								add_query_arg(
+									[
+										'page'  => self::SLUG,
+										'tab'   => 'log',
+										'view'  => (int) $row->id,
+										'reply' => 1,
+									],
+									admin_url( 'admin.php' )
+								)
+							);
+							?>
+																	#reply"><?php esc_html_e( 'Reply', 'mailkite-smtp' ); ?></a>
 						<?php endif; ?>
 						<?php if ( ! $row->no_body && 'inbound' !== $row->mailer ) : ?>
 							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
@@ -1101,7 +1140,15 @@ final class Menu {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
 		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) );
 
-		echo '<p style="margin-top:1em"><a href="' . esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log' ], admin_url( 'admin.php' ) ) ) . '">&larr; ' . esc_html__( 'Back to the log', 'mailkite-smtp' ) . '</a></p>';
+		echo '<p style="margin-top:1em"><a href="' . esc_url(
+			add_query_arg(
+				[
+					'page' => self::SLUG,
+					'tab'  => 'log',
+				],
+				admin_url( 'admin.php' )
+			)
+		) . '">&larr; ' . esc_html__( 'Back to the log', 'mailkite-smtp' ) . '</a></p>';
 
 		if ( ! $row ) {
 			echo '<p>' . esc_html__( 'Log entry not found (it may have been purged).', 'mailkite-smtp' ) . '</p>';
@@ -1160,7 +1207,20 @@ final class Menu {
 						<td style="width:11em"><?php echo esc_html( $t->created_at ); ?></td>
 						<td style="width:6em"><?php echo 'inbound' === $t->mailer ? esc_html__( 'received', 'mailkite-smtp' ) : esc_html__( 'sent', 'mailkite-smtp' ); ?></td>
 						<td><?php echo esc_html( 'inbound' === $t->mailer ? (string) $t->from_addr : (string) $t->mail_to ); ?></td>
-						<td><a href="<?php echo esc_url( add_query_arg( [ 'page' => self::SLUG, 'tab' => 'log', 'view' => (int) $t->id ], admin_url( 'admin.php' ) ) ); ?>"><?php echo esc_html( (string) $t->subject ); ?></a></td>
+						<td><a href="
+						<?php
+						echo esc_url(
+							add_query_arg(
+								[
+									'page' => self::SLUG,
+									'tab'  => 'log',
+									'view' => (int) $t->id,
+								],
+								admin_url( 'admin.php' )
+							)
+						);
+						?>
+										"><?php echo esc_html( (string) $t->subject ); ?></a></td>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>

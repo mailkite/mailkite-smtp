@@ -55,7 +55,8 @@ final class Connect {
 	public function handle_provision(): void {
 		$this->guard( 'mailkite_smtp_provision' );
 
-		$email = isset( $_POST['account_email'] ) ? sanitize_email( wp_unslash( $_POST['account_email'] ) ) : '';
+		// guard() ran check_admin_referer() above; the sniff cannot see through the helper.
+		$email = isset( $_POST['account_email'] ) ? sanitize_email( wp_unslash( $_POST['account_email'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in guard().
 		if ( ! is_email( $email ) ) {
 			$this->redirect( 'provision_invalid' );
 		}
@@ -111,7 +112,7 @@ final class Connect {
 		$base         = (string) Options::get( 'api_base' );
 		$redirect_uri = admin_url( 'admin-post.php?action=mailkite_smtp_oauth_cb' );
 
-		$reg = wp_remote_post(
+		$reg       = wp_remote_post(
 			$base . '/oauth/register',
 			[
 				'timeout' => 15,
@@ -184,8 +185,8 @@ final class Connect {
 			$this->redirect( 'oauth_failed' );
 		}
 
-		$base = (string) Options::get( 'api_base' );
-		$tok  = wp_remote_post(
+		$base   = (string) Options::get( 'api_base' );
+		$tok    = wp_remote_post(
 			$base . '/oauth/token',
 			[
 				'timeout' => 15,
@@ -210,7 +211,7 @@ final class Connect {
 				'headers' => [ 'Authorization' => 'Bearer ' . $access ],
 			]
 		);
-		$key = is_wp_error( $keys ) ? '' : (string) ( json_decode( wp_remote_retrieve_body( $keys ), true )['key'] ?? '' );
+		$key  = is_wp_error( $keys ) ? '' : (string) ( json_decode( wp_remote_retrieve_body( $keys ), true )['key'] ?? '' );
 		if ( '' === $key ) {
 			$this->redirect( 'oauth_failed' );
 		}
@@ -290,7 +291,16 @@ final class Connect {
 	 * @return never
 	 */
 	private function redirect( string $notice ): void {
-		wp_safe_redirect( add_query_arg( [ 'page' => 'mailkite-smtp', 'tab' => 'settings', 'notice' => $notice ], admin_url( 'admin.php' ) ) );
+		wp_safe_redirect(
+			add_query_arg(
+				[
+					'page'   => 'mailkite-smtp',
+					'tab'    => 'settings',
+					'notice' => $notice,
+				],
+				admin_url( 'admin.php' )
+			)
+		);
 		exit;
 	}
 }

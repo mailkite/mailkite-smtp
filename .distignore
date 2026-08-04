@@ -3,10 +3,12 @@
 .gitignore
 .distignore
 .editorconfig
+.blueprint-dev.json
 node_modules
 vendor
 src/**/*.map
 PLAN.md
+INBOX-PLAN.md
 README.md
 composer.json
 composer.lock
@@ -15,3 +17,4 @@ package-lock.json
 phpcs.xml
 phpstan.neon
 tests
+dist
