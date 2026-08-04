@@ -5,3 +5,5 @@ build/
 .DS_Store
 .idea/
 .vscode/
+# Build output: the distributable copy + submission zip are generated, never committed.
+dist/
