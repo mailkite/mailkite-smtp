@@ -18,3 +18,6 @@ phpcs.xml
 phpstan.neon
 tests
 dist
+# wp.org serves banners/icons from the SVN /assets directory — they are uploaded
+# there separately and must not ship to users inside the plugin zip.
+assets-wporg
