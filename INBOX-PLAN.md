@@ -123,3 +123,49 @@ instead of mailbox-create + route + credential.
 4. ~~Which platform ask next~~ — all shipped. Remaining question: build P1+P2 in one
    pass, or ship P1 (addresses + credentials, usable in Apple Mail) first and let the
    in-WP reader follow?
+
+---
+
+## 10. Address model — decision needed (2026-08-04)
+
+Question raised in testing: one address per user or several? Tied to the username or
+chosen? And why couldn't an existing mailbox be changed?
+
+**Why it couldn't be changed:** there was no rename. Changing the site's mailbox domain
+only affects NEW claims, so an existing address kept sending as the old domain. Fixed
+2026-08-04: the profile warns when an address is off-domain and offers a one-click
+**Move** (same local part, new domain, old address stops working). A *rename* — keeping
+the domain, changing the local part — is still missing.
+
+### Recommendation: one identity address per user, renameable; aliases later
+
+| Option | Verdict |
+|---|---|
+| **One address per user, derived from the username** | **Default.** One identity, one IMAP login, no decisions for the site owner. Matches what membership/team/agency sites actually want. |
+| Let the user pick the local part | Offer as a site setting (already built: "let users choose their own address"). Right for communities, wrong for staff mailboxes. |
+| Several *mailboxes* per user | Reject. Each is a separate IMAP account to configure and a separate inbox to check — the cost lands on the user for a rare need. |
+| Several *addresses* into one mailbox (aliases) | **The right shape for "multiple" when we build it:** one primary address (the identity + IMAP login) plus aliases that deliver to the same inbox and can be picked as From. Gmail/Fastmail model. |
+
+**Why aliases beat multiple mailboxes here:** MailKite app passwords already scope to an
+address *pattern* (`jane`, `support-*`, `*`), so one credential can cover a family of
+addresses without minting more. IMAP still logs in as one address, so the inbox stays
+single — the plugin would merge the per-address listings for the reader.
+
+### Settings shape to build
+
+`Address mode` (one choice, admin):
+1. **From username, locked** — `{username}@domain`, users cannot change it (default).
+2. **From username, renameable** — same, but the holder may rename once (or admin any time).
+3. **User chooses** — free local part at first claim, subject to the reserved list.
+
+Then: **Rename** on the profile (release + claim under the hood, with a plain warning that
+the old address stops receiving), and later **Aliases** as an additive list per user.
+
+### Edge cases to handle when building
+- Two usernames can slugify to the same local part (`jane.doe` and `jane_doe` → `jane-doe`).
+  Auto-assign must append a suffix (`jane-doe2`) rather than silently fail for the second user.
+- WordPress usernames are immutable in the UI, so "tied to username" is stable in practice —
+  but a rename must never orphan mail: warn, and prefer keeping the old address as an alias
+  once aliases exist.
+- Moving/renaming revokes the old credential: any mail client configured with it stops
+  working and must be updated. Say so at the point of action.
