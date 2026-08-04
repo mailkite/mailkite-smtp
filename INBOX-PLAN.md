@@ -260,3 +260,90 @@ uses for its own outbound rows.
 - [x] 8. Inbox lists and reads from the local Store instead of a per-view API call.
 - [x] 9. "Sync now" backfills from the mailbox API — the repair path for anything the
       webhook missed while the site was down.
+
+---
+
+## 12. Keeping the inbox current — cron, live UI, and whether we need SSE (2026-08-04)
+
+Three questions: does WordPress have cron, is the inbox live, and should MailKite grow an
+SSE endpoint. Researched before deciding; one finding reorders the answers.
+
+### The finding that matters most
+
+**MailKite has no automated webhook retry.** `docs/architecture/webhook-delivery-status.md`
+records "Automated retry / backoff: **None**" — only a manual
+`POST /api/deliveries/:id/retry`. So if a site is down, slow, or returns a 500 for one
+delivery, that mail is never pushed again. Local storage is only as trustworthy as the one
+delivery attempt behind it.
+
+That makes reconciliation **the safety net the archive depends on**, not a nicety — and it
+makes "add automatic retry upstream" arguably worth more than any streaming work, because
+it fixes delivery for every MailKite customer, not only for consumers who can stream.
+
+### A. WP-Cron: yes, with a caveat worth stating plainly
+
+WordPress has cron, but it is **pseudo-cron**: due events run on a page visit, not on a
+timer. A quiet site can be hours late; a site with no visitors never fires at all. The
+standard fix is `DISABLE_WP_CRON` plus a real system cron hitting `wp-cron.php`, which we
+should document rather than assume.
+
+**Plan:** add a `mailkite_mailboxes_reconcile` event (custom 15-minute interval) that runs
+the same sync the button runs. Cost control matters — sync is one API list call per mailbox,
+plus a fetch per missing message:
+- only users who hold a mailbox,
+- cap the number reconciled per run and rotate through them, so 500 mailboxes don't become
+  500 API calls in one tick,
+- skip users with no activity in N days (configurable), newest-first.
+
+Keep the button: cron is the backstop, the button is what someone presses when they are
+staring at a missing email.
+
+### B. Is the inbox live? No — and Heartbeat is the right fix, not SSE
+
+Today the list does a full `location.reload()` every 60 seconds. It is not live, it throws
+away scroll position, and it is the bluntest tool available.
+
+**WordPress already ships the right mechanism: the Heartbeat API.** It polls admin-ajax
+about every 15 seconds while the tab is focused, backs off when it is not, and is designed
+for exactly this. Server side `heartbeat_received` returns "newest id / unread count";
+client side `heartbeat-tick` updates the list **in place** — no reload, nothing lost if
+someone is mid-reply.
+
+**SSE *from WordPress* is a bad fit and we should not build it:** each connection pins a PHP
+worker for its lifetime, and shared hosts buffer or kill long responses. That is how you take
+a site down with a mail plugin.
+
+Front-end note: `wp.heartbeat` is enqueued in wp-admin only, so `[mailkite_inbox]` on the
+front end needs a small REST poll instead of Heartbeat. Same server logic either way.
+
+### C. SSE on the MailKite API — build it, but not for this
+
+The WP plugin does not need it: webhook (push) + Heartbeat (UI) + cron (repair) covers the
+requirement without new infrastructure or new credentials in a browser.
+
+Where it genuinely earns its place is consumers that **cannot receive a webhook**:
+- local development — we burned real time on a cloudflared tunnel this week purely to
+  receive mail on localhost; `GET /v1/events` would have removed that entirely,
+- a CLI `mailkite tail` for watching mail arrive,
+- agents and browser apps polling today because they have no public URL.
+
+Sketch, if we build it:
+- `GET /v1/events` returning `text/event-stream`, filterable by domain/address,
+- auth: API key for servers; for browsers a **short-lived stream token** — never a
+  long-lived key in client JS,
+- `Last-Event-ID` for resume, comment heartbeats ~15s, client reconnect with backoff,
+- infrastructure: fan-out wants **Durable Objects, which this Worker does not use today**
+  (queues exist, DOs do not). A polling-loop Worker is simpler to write and more expensive
+  to run. This is the real decision, not the endpoint shape.
+- **SSOT implication:** `api.json` currently describes request/response methods only. A
+  streaming method is a new *shape* — the spec, SDK codegen, and MCP surface would each need
+  to express "returns a stream", which is a bigger change than adding a route.
+
+### Order of work (recommended)
+
+1. **Heartbeat in the plugin** — removes the reload, small and self-contained.
+2. **Cron reconcile** — the safety net the archive currently lacks.
+3. **Automated webhook retry/backoff upstream** — fixes the actual reliability gap for
+   every customer; larger value than streaming.
+4. **SSE** as its own platform project, with the DO decision and the spec-shape question
+   settled first.
