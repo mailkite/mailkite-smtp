@@ -169,3 +169,74 @@ the old address stops receiving), and later **Aliases** as an additive list per 
   once aliases exist.
 - Moving/renaming revokes the old credential: any mail client configured with it stops
   working and must be updated. Say so at the point of action.
+
+---
+
+## 11. One webhook, one store (decided 2026-08-04)
+
+Today there are two unrelated inbound paths: the SMTP plugin takes a **webhook push** and
+stores rows locally; the Mailboxes add-on **pulls live** from the mailbox API and stores
+nothing. That splits the truth, duplicates delivery, and leaves personal mail readable by
+any administrator in the site log.
+
+**Decision: one webhook, one local store, owned by the SMTP plugin; the add-on reads it.**
+
+### Why local storage at all
+MailKite retention is finite. The WordPress database becomes the archive of record — mail
+stays readable after it ages out upstream. It also removes an API round-trip per page view,
+which is what makes the inbox feel slow today.
+
+### Ownership
+The add-on already depends on the SMTP plugin (`Requires Plugins`), so the dependency
+direction is settled: **the parent owns the endpoint and the schema**, the add-on only
+reads. The add-on must never register a second webhook — one endpoint, one row per message.
+
+### Schema (parent, migration to DB_VERSION 3)
+Split the body off the list table so listing never drags message text through memory:
+
+| Table | Holds |
+|---|---|
+| `..._log` (exists) | envelope + metadata: from, to, subject, status, mailer, thread_id, message_id, direction |
+| `..._body` (new) | `log_id`, `body_text` LONGTEXT, `body_html` LONGTEXT |
+| `..._attachment` (new) | `log_id`, filename, mime, size, storage (`db`/`file`/`remote`), path/url |
+
+MySQL LONGTEXT is fine for HTML mail (typical 20–200KB; the ceiling is 4GB). The bloat
+problem is not size, it is `SELECT *` on the list query — solved by the split, not by moving
+bodies to disk.
+
+### Attachments — where the file question lands
+`wp_upload_dir()` is writable and `WP_Filesystem` works, but **uploads are web-served**:
+`/wp-content/uploads/...` is a public URL. Storing raw mail there risks exactly the leak
+several email-log plugins have shipped. Rules if we store files:
+- write under `uploads/mailkite-private/` with an unguessable per-message directory,
+- drop `index.php`, `.htaccess` (deny all) **and** `web.config` — noting nginx honours none
+  of these, so obscurity + a PHP-gated download endpoint is the real control,
+- never link the file path directly; serve through an authenticated endpoint that checks
+  ownership.
+Default: **do not store attachment bytes.** Keep filename/size/mime metadata and MailKite's
+signed URL; offer "keep a local copy" as an explicit opt-in for people who need the archive.
+
+### Access control (the leak this fixes)
+A row whose recipient matches a **claimed user mailbox** is that user's mail:
+- the admin Email Log must exclude it,
+- the add-on shows it to that user only, matched on their stored address,
+- capability check at query level, never in the template.
+Site mail (`hello@`, `noreply@` replies, bounces) stays fully visible to admins as now.
+
+### Retention, split in two
+- **Log retention** (site mail): current setting, purge after N days.
+- **Mailbox retention** (user mail): separate, default *keep* — purging someone's inbox on a
+  log-cleanup schedule would be data loss.
+
+### Reliability: webhook first, API as repair
+Push is the fast path; a site that was offline still misses mail no matter the retries. Keep
+the mailbox API as a **backfill/repair** path: "sync now" pulls anything missing since the
+newest stored uid. Webhook for realtime, pull for gaps — the same pattern the log already
+uses for its own outbound rows.
+
+### Build order
+1. Parent: schema v3 + body/attachment tables; inbound writes them; log detail reads them.
+2. Parent: per-user rows excluded from the admin log; ownership helper the add-on can call.
+3. Add-on: inbox reads local rows for the user's address (API only as fallback/backfill).
+4. Retention split + a "sync now" repair action.
+5. Optional: opt-in local attachment storage behind the protections above.
