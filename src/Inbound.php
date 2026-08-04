@@ -229,9 +229,9 @@ final class Inbound {
 		}
 
 		// When a signing secret is configured, additionally require MailKite's
-		// x-mailkite-signature header: `t=<ms>,v1=<hex>` where
-		// v1 = HMAC-SHA256(secret, "{t}.{raw body}"), fresh within ±5 minutes.
-		// (Scheme per the MailKite spec's verifyWebhook; constant-time compare.)
+		// x-mailkite-signature header of the form t=<ms>,v1=<hex>, where v1 is
+		// HMAC-SHA256(secret, "{t}.{raw body}") and t must be within 5 minutes.
+		// The scheme matches the MailKite spec's verifyWebhook; compare is constant-time.
 		$hmac_secret = (string) Options::get( 'inbound_hmac_secret' );
 		if ( '' !== $hmac_secret && ! $this->valid_signature( $request, $hmac_secret ) ) {
 			return new WP_Error( 'bad_signature', 'Invalid or stale signature.', [ 'status' => 403 ] );
