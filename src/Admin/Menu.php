@@ -112,32 +112,32 @@ final class Menu {
 		];
 		$input  = [];
 		foreach ( $fields as $field ) {
-			if ( ! isset( $_POST[ $field ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
+			if ( ! isset( $_POST[ $field ] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- sanitized in Options::sanitize(). guard() ran current_user_can() + check_admin_referer() before any of this.
 				continue;
 			}
 			$blank_keeps_saved = in_array( $field, [ 'api_key', 'smtp_password', 'sendgrid_key', 'brevo_key', 'mailgun_key', 'inbound_hmac_secret' ], true );
-			if ( $blank_keeps_saved && '' === $_POST[ $field ] ) {
+			if ( $blank_keeps_saved && '' === $_POST[ $field ] ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 				continue; // Empty secret field means "keep the stored one".
 			}
-			$input[ $field ] = wp_unslash( $_POST[ $field ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			$input[ $field ] = wp_unslash( $_POST[ $field ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- sanitized in Options::sanitize(); guard() ran current_user_can() + check_admin_referer() before any of this.
 		}
 		// Checkboxes are absent from POST when unchecked, so only apply the set
 		// belonging to the form that was actually submitted (settings vs. the
 		// inbound/health tabs, which reuse this handler via _back_tab).
-		$tab      = isset( $_POST['_back_tab'] ) ? sanitize_key( wp_unslash( $_POST['_back_tab'] ) ) : 'settings';
+		$tab      = isset( $_POST['_back_tab'] ) ? sanitize_key( wp_unslash( $_POST['_back_tab'] ) ) : 'settings'; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		$bool_map = [
 			'settings' => [ 'smtp_auth', 'log_enabled', 'log_redact_auth', 'fallback_enabled', 'alerts_enabled' ],
 			'inbound'  => [], // inbound_enabled is managed by the connect/disconnect actions, never this form.
 			'health'   => [ 'summary_enabled' ],
 		];
 		foreach ( $bool_map[ $tab ] ?? $bool_map['settings'] as $bool_field ) {
-			$input[ $bool_field ] = isset( $_POST[ $bool_field ] );
+			$input[ $bool_field ] = isset( $_POST[ $bool_field ] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		}
-		if ( isset( $_POST['inbound_forward'] ) ) {
-			$input['inbound_forward'] = wp_unslash( $_POST['inbound_forward'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized in Options::sanitize().
+		if ( isset( $_POST['inbound_forward'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
+			$input['inbound_forward'] = wp_unslash( $_POST['inbound_forward'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- sanitized in Options::sanitize(). guard() ran current_user_can() + check_admin_referer() before any of this.
 		}
-		if ( isset( $_POST['routing_rules'] ) && is_array( $_POST['routing_rules'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- per-rule sanitize in Options::sanitize().
-			$input['routing_rules'] = array_values( wp_unslash( $_POST['routing_rules'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		if ( isset( $_POST['routing_rules'] ) && is_array( $_POST['routing_rules'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- per-rule sanitize in Options::sanitize(). guard() ran current_user_can() + check_admin_referer() before any of this.
+			$input['routing_rules'] = array_values( wp_unslash( $_POST['routing_rules'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- sanitized in Options::sanitize(); guard() ran current_user_can() + check_admin_referer() before any of this.
 		}
 
 		Options::update( $input );
@@ -160,7 +160,7 @@ final class Menu {
 	public function handle_inbound_connect(): void {
 		$this->guard( 'mailkite_smtp_inbound_connect' );
 
-		$domain_id = isset( $_POST['inbound_domain_id'] ) ? sanitize_text_field( wp_unslash( $_POST['inbound_domain_id'] ) ) : '';
+		$domain_id = isset( $_POST['inbound_domain_id'] ) ? sanitize_text_field( wp_unslash( $_POST['inbound_domain_id'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		$result    = \MailKite\Smtp\Inbound::connect( $domain_id );
 
 		$this->redirect( 'inbound', true === $result ? 'inbound_on' : 'inbound_failed' );
@@ -206,7 +206,7 @@ final class Menu {
 	public function handle_import_settings(): void {
 		$this->guard( 'mailkite_smtp_import_settings' );
 
-		$json = isset( $_POST['settings_json'] ) ? wp_unslash( $_POST['settings_json'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- parsed as JSON, sanitized in Options::sanitize().
+		$json = isset( $_POST['settings_json'] ) ? wp_unslash( $_POST['settings_json'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput, WordPress.Security.NonceVerification.Missing -- parsed as JSON, sanitized in Options::sanitize(). guard() ran current_user_can() + check_admin_referer() before any of this.
 		$data = json_decode( (string) $json, true );
 		if ( is_array( $data ) ) {
 			unset( $data['api_key'], $data['smtp_password'], $data['sendgrid_key'], $data['brevo_key'], $data['mailgun_key'], $data['inbound_secret'], $data['inbound_hmac_secret'] );
@@ -222,7 +222,7 @@ final class Menu {
 	public function handle_test(): void {
 		$this->guard( 'mailkite_smtp_test' );
 
-		$to = isset( $_POST['test_to'] ) ? sanitize_email( wp_unslash( $_POST['test_to'] ) ) : '';
+		$to = isset( $_POST['test_to'] ) ? sanitize_email( wp_unslash( $_POST['test_to'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		if ( ! $to ) {
 			$this->redirect( 'test', 'test_invalid' );
 		}
@@ -247,7 +247,7 @@ final class Menu {
 	public function handle_import(): void {
 		$this->guard( 'mailkite_smtp_import' );
 
-		$source = isset( $_POST['source'] ) ? sanitize_key( wp_unslash( $_POST['source'] ) ) : '';
+		$source = isset( $_POST['source'] ) ? sanitize_key( wp_unslash( $_POST['source'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		$done   = $source && \MailKite\Smtp\Migrate\Importer::import( $source );
 
 		$this->redirect( 'settings', $done ? 'imported' : 'import_failed' );
@@ -281,7 +281,7 @@ final class Menu {
 	public function handle_resend(): void {
 		$this->guard( 'mailkite_smtp_resend' );
 
-		$id  = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0;
+		$id  = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		$row = \MailKite\Smtp\Log\Store::get( $id );
 
 		if ( ! $row || empty( $row->body_text ) ) {
@@ -299,8 +299,8 @@ final class Menu {
 	public function handle_reply(): void {
 		$this->guard( 'mailkite_smtp_reply' );
 
-		$id   = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0;
-		$body = isset( $_POST['body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['body'] ) ) : '';
+		$id   = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
+		$body = isset( $_POST['body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['body'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() ran current_user_can() + check_admin_referer() before any of this.
 		$row  = \MailKite\Smtp\Log\Store::get( $id );
 
 		if ( ! $row || 'inbound' !== $row->mailer || ! $row->from_addr || '' === $body ) {

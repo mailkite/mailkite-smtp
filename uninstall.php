@@ -20,6 +20,6 @@ global $wpdb;
 // table left those two behind on every uninstall — invisible, and still holding message
 // text. Children first so nothing outlives its parent row.
 foreach ( [ 'mailkite_smtp_attachment', 'mailkite_smtp_body', 'mailkite_smtp_log' ] as $mailkite_smtp_table ) {
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- uninstall cleanup of our own tables; the name is a literal from the list above.
-	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}{$mailkite_smtp_table}" );
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall cleanup of our own tables.
+	$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $wpdb->prefix . $mailkite_smtp_table ) );
 }

@@ -98,7 +98,9 @@ final class Email {
 		}
 
 		// Resolved sender, honoring the same filters core applies.
-		$from_email  = apply_filters( 'wp_mail_from', self::default_from_email() );
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's own hook, not ours. Replacing wp_mail() means firing exactly what core fires, or every plugin listening to it breaks.
+		$from_email = apply_filters( 'wp_mail_from', self::default_from_email() );
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's own hook, not ours. Replacing wp_mail() means firing exactly what core fires, or every plugin listening to it breaks.
 		$from_name   = apply_filters( 'wp_mail_from_name', 'WordPress' );
 		$email->from = '' === $email->from ? sprintf( '%s <%s>', $from_name, $from_email ) : $email->from;
 

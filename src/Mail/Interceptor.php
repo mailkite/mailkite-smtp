@@ -101,11 +101,13 @@ final class Interceptor {
 			}
 
 			$error = new WP_Error( 'wp_mail_failed', $result->get_error_message(), $mail_data );
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's own hook, not ours. Replacing wp_mail() means firing exactly what core fires, or every plugin listening to it breaks.
 			do_action( 'wp_mail_failed', $error );
 
 			return false;
 		}
 
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core's own hook, not ours. Replacing wp_mail() means firing exactly what core fires, or every plugin listening to it breaks.
 		do_action( 'wp_mail_succeeded', $mail_data );
 
 		return true;
