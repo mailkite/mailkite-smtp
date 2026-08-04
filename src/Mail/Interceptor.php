@@ -79,7 +79,18 @@ final class Interceptor {
 		];
 
 		if ( is_wp_error( $result ) ) {
-			if ( Options::get( 'fallback_enabled' ) ) {
+			/**
+			 * Filters whether this particular send may fall back to another transport.
+			 *
+			 * Failover is right for a site's automated mail — a receipt should go out
+			 * somehow. It is wrong for mail a person wrote as themselves: silently
+			 * rerouting that through PHP mail() produces a "sent" they cannot trust.
+			 *
+			 * @param bool  $enabled Whether failover applies to this message.
+			 * @param Email $email   The message that just failed.
+			 */
+			$fallback = (bool) apply_filters( 'mailkite_smtp_fallback_enabled', (bool) Options::get( 'fallback_enabled' ), $email );
+			if ( $fallback ) {
 				// Let core deliver via PHPMailer instead: SMTP when configured, PHP
 				// mail() otherwise. The pending log row keeps its outcome from the
 				// wp_mail_succeeded / wp_mail_failed the core path fires.

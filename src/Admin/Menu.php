@@ -1085,6 +1085,9 @@ final class Menu {
 					<td>
 						<?php if ( 'failed' === $row->status ) : ?>
 							<span style="color:#b32d2e" title="<?php echo esc_attr( (string) $row->error ); ?>">✗ <?php esc_html_e( 'failed', 'mailkite-smtp' ); ?></span>
+						<?php elseif ( 'sent' === $row->status && ! empty( $row->error ) ) : ?>
+							<?php // A clean send stores no error, so text here means the chosen mailer refused and failover carried it — never show that as a plain success. ?>
+							<span style="color:#b45309" title="<?php echo esc_attr( (string) $row->error ); ?>">⚠ <?php esc_html_e( 'sent via fallback', 'mailkite-smtp' ); ?></span>
 						<?php elseif ( 'sent' === $row->status ) : ?>
 							<span style="color:#00a32a">✓ <?php esc_html_e( 'sent', 'mailkite-smtp' ); ?></span>
 						<?php else : ?>
@@ -1162,7 +1165,8 @@ final class Menu {
 				<?php endif; ?>
 				<tr><td><strong><?php esc_html_e( 'To', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->mail_to ); ?></td></tr>
 				<tr><td><strong><?php esc_html_e( 'Subject', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->subject ); ?></td></tr>
-				<tr><td><strong><?php esc_html_e( 'Status', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( $row->status ); ?></td></tr>
+				<tr><td><strong><?php esc_html_e( 'Status', 'mailkite-smtp' ); ?></strong></td>
+					<td><?php echo esc_html( ( 'sent' === $row->status && ! empty( $row->error ) ) ? __( 'sent via fallback — the mailer you chose refused it', 'mailkite-smtp' ) : (string) $row->status ); ?></td></tr>
 				<?php if ( $row->error ) : ?>
 					<tr><td><strong><?php esc_html_e( 'Detail', 'mailkite-smtp' ); ?></strong></td><td><?php echo esc_html( (string) $row->error ); ?></td></tr>
 				<?php endif; ?>
