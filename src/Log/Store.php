@@ -25,9 +25,9 @@ final class Store {
 	/**
 	 * Record a message and its parts.
 	 *
-	 * @param array<string, mixed> $row  Envelope columns for the log table.
-	 * @param string               $text Plain-text body ('' when none).
-	 * @param string               $html HTML body ('' when none).
+	 * @param array<string, mixed>                                                      $row  Envelope columns for the log table.
+	 * @param string                                                                    $text Plain-text body ('' when none).
+	 * @param string                                                                    $html HTML body ('' when none).
 	 * @param array<int, array{filename: string, mime: string, size: int, url: string}> $attachments Attachment metadata.
 	 * @return int The new row id (0 on failure).
 	 */
@@ -169,7 +169,7 @@ final class Store {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- prepared above.
 		$row = $wpdb->get_row( $sql );
 
-		return $row ?: null;
+		return $row instanceof \stdClass ? $row : null;
 	}
 
 	/**
@@ -197,7 +197,14 @@ final class Store {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
-		$wpdb->update( LogTable::name(), [ 'seen' => 1 ], [ 'id' => $id, 'owner_user_id' => $user_id ] );
+		$wpdb->update(
+			LogTable::name(),
+			[ 'seen' => 1 ],
+			[
+				'id'            => $id,
+				'owner_user_id' => $user_id,
+			]
+		);
 	}
 
 	/**

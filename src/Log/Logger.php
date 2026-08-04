@@ -73,7 +73,7 @@ final class Logger {
 
 		// A mailbox user's own outgoing mail belongs to them, so their Sent folder can show
 		// it and the admin log does not.
-		$from  = '';
+		$from = '';
 		foreach ( (array) $raw_headers as $header ) {
 			if ( is_string( $header ) && preg_match( '/^\s*from\s*:\s*(.+)$/i', $header, $f ) ) {
 				$from = trim( $f[1] );

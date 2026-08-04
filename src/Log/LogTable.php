@@ -116,12 +116,22 @@ final class LogTable {
 		$log  = self::name();
 		$body = self::body_table();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
-		$wpdb->query( "INSERT IGNORE INTO {$body} (log_id, body_text, body_html) SELECT id, body, NULL FROM {$log} WHERE body IS NOT NULL AND body <> ''" );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
-		$wpdb->query( "UPDATE {$log} SET body = NULL WHERE body IS NOT NULL AND body <> ''" );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
-		$wpdb->query( "UPDATE {$log} SET direction = CASE WHEN mailer = 'inbound' THEN 'inbound' ELSE 'outbound' END" );
+		// Table names go through %i (WP 6.2+) rather than string interpolation — same
+		// reason every other query here does: an identifier built by hand is the shape a
+		// SQL injection takes, even when today's input is a constant.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- schema migration on our own tables.
+		$wpdb->query(
+			$wpdb->prepare(
+				'INSERT IGNORE INTO %i (log_id, body_text, body_html) SELECT id, body, NULL FROM %i WHERE body IS NOT NULL AND body <> %s',
+				$body,
+				$log,
+				''
+			)
+		);
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- schema migration on our own tables.
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET body = NULL WHERE body IS NOT NULL AND body <> %s', $log, '' ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- schema migration on our own tables.
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET direction = CASE WHEN mailer = %s THEN %s ELSE %s END', $log, 'inbound', 'inbound', 'outbound' ) );
 	}
 
 	/**
@@ -149,6 +159,7 @@ final class LogTable {
 		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE log_id IN (SELECT id FROM %i WHERE owner_user_id IS NULL AND created_at < %s)', self::body_table(), self::name(), $cutoff ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
 		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE log_id IN (SELECT id FROM %i WHERE owner_user_id IS NULL AND created_at < %s)', self::attachment_table(), self::name(), $cutoff ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
 		$wpdb->query(
 			$wpdb->prepare(
 				'DELETE FROM %i WHERE owner_user_id IS NULL AND created_at < %s',

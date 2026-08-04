@@ -258,8 +258,8 @@ uses for its own outbound rows.
 **Add-on — MailKite Mailboxes (reads, never writes schema)** — done 2026-08-04
 - [x] 7. Answer `mailkite_smtp_mailbox_owner` so ingest can stamp the right user.
 - [x] 8. Inbox lists and reads from the local Store instead of a per-view API call.
-- [x] 9. "Sync now" backfills from the mailbox API — the repair path for anything the
-      webhook missed while the site was down.
+- [x] 9. Backfill from the mailbox API — the repair path for anything the webhook missed
+      while the site was down. Shipped as a scheduled job, not a button (see §12).
 
 ---
 
@@ -295,8 +295,11 @@ plus a fetch per missing message:
   500 API calls in one tick,
 - skip users with no activity in N days (configurable), newest-first.
 
-Keep the button: cron is the backstop, the button is what someone presses when they are
-staring at a missing email.
+~~Keep the button: cron is the backstop, the button is what someone presses when they are
+staring at a missing email.~~ **Reversed on implementation (2026-08-04):** the button went
+too. A mailbox that needs someone to press Sync is quietly wrong for everyone who never
+thinks to press it, and between webhook, Heartbeat and cron there was nothing left for it
+to do that the site does not already do on its own.
 
 ### B. Is the inbox live? No — and Heartbeat is the right fix, not SSE
 
@@ -335,15 +338,23 @@ Sketch, if we build it:
 - infrastructure: fan-out wants **Durable Objects, which this Worker does not use today**
   (queues exist, DOs do not). A polling-loop Worker is simpler to write and more expensive
   to run. This is the real decision, not the endpoint shape.
-- **SSOT implication:** `api.json` currently describes request/response methods only. A
-  streaming method is a new *shape* — the spec, SDK codegen, and MCP surface would each need
-  to express "returns a stream", which is a bigger change than adding a route.
+- **SSOT implication:** `api.json` describes request/response methods only. A subscription
+  is a different *shape* — no return value, but a lifetime, a filter, and a resume point.
+  **Settled 2026-08-04:** it gets its own contract, `sdks/spec/realtime.json` (the Realtime
+  API), rather than a `streaming: true` flag that would teach 83 methods' worth of consumers
+  that `returns` is sometimes a lie.
 
 ### Order of work (recommended)
 
-1. **Heartbeat in the plugin** — removes the reload, small and self-contained.
-2. **Cron reconcile** — the safety net the archive currently lacks.
-3. **Automated webhook retry/backoff upstream** — fixes the actual reliability gap for
-   every customer; larger value than streaming.
-4. **SSE** as its own platform project, with the DO decision and the spec-shape question
-   settled first.
+1. ~~**Heartbeat in the plugin**~~ — **done 2026-08-04.** Updates the list in place; the
+   full reload it replaced discarded scroll position and any half-written reply.
+2. ~~**Cron reconcile**~~ — **done 2026-08-04.** 15-minute rotation, batched. Its first
+   real run pulled in two messages that were missing locally.
+3. ~~**Automated webhook retry/backoff upstream**~~ — **already shipped, and had been for a
+   while.** Migration 0026 plus a minutely cron: the Svix ladder (5s → 5m → 30m → 2h → 5h →
+   10h → 10h), per-attempt audit, failure email, single and bulk replay. The gap analysis in
+   web-monorepo `docs/architecture/webhook-retries.md` narrows the remaining work to four
+   small items, chiefly that a 404 endpoint burns all 27 hours of retries before anyone
+   learns it is misconfigured.
+4. **Realtime API** as its own platform project — contract drafted at
+   `sdks/spec/realtime.json`, awaiting approval. The Durable Objects question is still open.

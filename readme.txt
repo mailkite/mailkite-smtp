@@ -4,7 +4,7 @@ Tags: smtp, email, email log, deliverability, wp mail
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,14 @@ Yes. Received messages get a Reply action in the Email Log. The reply goes out a
 4. Domain Health — SPF/DMARC checks with weekly drift alerts.
 
 == Changelog ==
+
+= 0.4.0 =
+* Received mail is now stored in WordPress, so it stays readable after MailKite's retention window ends.
+* One inbound webhook serves this plugin and MailKite Mailboxes, writing to one set of tables instead of two.
+* Mail belonging to a user's personal mailbox no longer appears in the site-wide Email Log — ownership is enforced in the query, not in the template.
+* Retention purges site mail only; personal mailbox mail is never deleted by it.
+* A send that falls back to another mailer is labelled as such in the log, instead of reporting plain success.
+* Inbound webhooks are registered on the connected MailKite account automatically — no copying URLs by hand.
 
 = 0.3.0 =
 * Inbound: reply to received mail from the Email Log, threaded (From is forced to the address it was delivered to).

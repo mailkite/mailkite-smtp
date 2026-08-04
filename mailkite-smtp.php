@@ -3,7 +3,7 @@
  * Plugin Name:       MailKite SMTP – Multi-Provider SMTP with Failover, Email Logs & Inbound Email
  * Plugin URI:        https://mailkite.dev/docs/integrations/wordpress
  * Description:       Fix WordPress email delivery: MailKite, SendGrid, Brevo, Mailgun or any SMTP, with free logs, automatic failover, alerts, and inbound email.
- * Version:           0.3.0
+ * Version:           0.4.0
  * Requires at least: 6.2
  * Requires PHP:      8.1
  * Author:            MailKite
@@ -19,7 +19,7 @@ namespace MailKite\Smtp;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION     = '0.3.0';
+const VERSION     = '0.4.0';
 const PLUGIN_FILE = __FILE__;
 
 define( 'MAILKITE_SMTP_DIR', plugin_dir_path( __FILE__ ) );
