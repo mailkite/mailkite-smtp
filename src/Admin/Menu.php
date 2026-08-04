@@ -142,10 +142,6 @@ final class Menu {
 
 		Options::update( $input );
 
-		if ( ! empty( $input['inbound_enabled'] ) && '' === (string) Options::get( 'inbound_secret' ) ) {
-			\MailKite\Smtp\Inbound::rotate_secret();
-		}
-
 		$this->redirect( in_array( $tab, [ 'inbound', 'health' ], true ) ? $tab : 'settings', 'saved' );
 	}
 
