@@ -261,14 +261,14 @@ final class Menu {
 
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin export.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT created_at, mail_to, subject, mailer, status, error, redacted FROM %i ORDER BY id DESC', LogTable::name() ), ARRAY_A );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT created_at, mail_to, from_addr, subject, mailer, direction, status, error FROM %i WHERE owner_user_id IS NULL ORDER BY id DESC', LogTable::name() ), ARRAY_A );
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
 		header( 'Content-Disposition: attachment; filename=mailkite-smtp-log-' . gmdate( 'Ymd-His' ) . '.csv' );
 
 		$out = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- streaming CSV response.
-		fputcsv( $out, [ 'created_at_utc', 'to', 'subject', 'mailer', 'status', 'error', 'redacted' ] );
+		fputcsv( $out, [ 'created_at_utc', 'to', 'from', 'subject', 'mailer', 'direction', 'status', 'error' ] );
 		foreach ( (array) $rows as $row ) {
 			fputcsv( $out, array_values( $row ) );
 		}
@@ -281,16 +281,15 @@ final class Menu {
 	public function handle_resend(): void {
 		$this->guard( 'mailkite_smtp_resend' );
 
-		global $wpdb;
 		$id  = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0;
-		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
+		$row = \MailKite\Smtp\Log\Store::get( $id );
 
-		if ( ! $row || null === $row->body ) {
+		if ( ! $row || empty( $row->body_text ) ) {
 			$this->redirect( 'log', 'resend_failed' );
 		}
 
 		$headers = json_decode( (string) $row->headers, true );
-		$sent    = wp_mail( explode( ', ', $row->mail_to ), $row->subject, $row->body, is_array( $headers ) ? $headers : [] );
+		$sent    = wp_mail( explode( ', ', $row->mail_to ), $row->subject, (string) $row->body_text, is_array( $headers ) ? $headers : [] );
 		$this->redirect( 'log', $sent ? 'resent' : 'resend_failed' );
 	}
 
@@ -300,11 +299,9 @@ final class Menu {
 	public function handle_reply(): void {
 		$this->guard( 'mailkite_smtp_reply' );
 
-		global $wpdb;
 		$id   = isset( $_POST['log_id'] ) ? absint( $_POST['log_id'] ) : 0;
 		$body = isset( $_POST['body'] ) ? sanitize_textarea_field( wp_unslash( $_POST['body'] ) ) : '';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
-		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) );
+		$row  = \MailKite\Smtp\Log\Store::get( $id );
 
 		if ( ! $row || 'inbound' !== $row->mailer || ! $row->from_addr || '' === $body ) {
 			$this->redirect( 'log', 'reply_failed' );
@@ -1028,9 +1025,8 @@ final class Menu {
 			return;
 		}
 
-		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id, created_at, mail_to, from_addr, subject, mailer, status, error, redacted, body IS NULL AS no_body FROM %i ORDER BY id DESC LIMIT 100', LogTable::name() ) );
+		// Site mail only — a user's personal mailbox is not the site's log. Store enforces it.
+		$rows = \MailKite\Smtp\Log\Store::site_messages( 100 );
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
 			<input type="hidden" name="action" value="mailkite_smtp_export" />
@@ -1112,7 +1108,7 @@ final class Menu {
 							?>
 																	#reply"><?php esc_html_e( 'Reply', 'mailkite-smtp' ); ?></a>
 						<?php endif; ?>
-						<?php if ( ! $row->no_body && 'inbound' !== $row->mailer ) : ?>
+						<?php if ( 'inbound' !== $row->mailer ) : ?>
 							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
 								<input type="hidden" name="action" value="mailkite_smtp_resend" />
 								<input type="hidden" name="log_id" value="<?php echo esc_attr( (string) $row->id ); ?>" />
@@ -1135,9 +1131,7 @@ final class Menu {
 	 * @param int $id Log row id.
 	 */
 	private function render_log_detail( int $id ): void {
-		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
-		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', LogTable::name(), $id ) );
+		$row = \MailKite\Smtp\Log\Store::get( $id );
 
 		echo '<p style="margin-top:1em"><a href="' . esc_url(
 			add_query_arg(
@@ -1175,11 +1169,34 @@ final class Menu {
 		<h2 style="margin-top:1em"><?php esc_html_e( 'Message', 'mailkite-smtp' ); ?></h2>
 		<?php if ( $row->redacted ) : ?>
 			<p class="description"><?php esc_html_e( 'Body not stored — this looked like an authentication email (password reset / verification), and storing those is off by default for your users’ safety.', 'mailkite-smtp' ); ?></p>
-		<?php elseif ( null === $row->body || '' === $row->body ) : ?>
-			<p class="description"><?php esc_html_e( 'No body stored for this entry.', 'mailkite-smtp' ); ?></p>
+		<?php elseif ( ! empty( $row->body_text ) ) : ?>
+			<pre style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px;max-width:860px;max-height:32em;overflow:auto;white-space:pre-wrap"><?php echo esc_html( (string) $row->body_text ); ?></pre>
+		<?php elseif ( ! empty( $row->body_html ) ) : ?>
+			<div style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px;max-width:860px;max-height:32em;overflow:auto"><?php echo wp_kses_post( (string) $row->body_html ); ?></div>
 		<?php else : ?>
-			<pre style="background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:16px;max-width:860px;max-height:32em;overflow:auto;white-space:pre-wrap"><?php echo esc_html( (string) $row->body ); ?></pre>
+			<p class="description"><?php esc_html_e( 'No body stored for this entry.', 'mailkite-smtp' ); ?></p>
 		<?php endif; ?>
+		<?php
+		$files = \MailKite\Smtp\Log\Store::attachments( $id );
+		if ( $files ) :
+			?>
+			<h2><?php esc_html_e( 'Attachments', 'mailkite-smtp' ); ?></h2>
+			<ul style="max-width:860px">
+				<?php foreach ( $files as $file ) : ?>
+					<li>
+						<?php if ( $file->url ) : ?>
+							<a href="<?php echo esc_url( (string) $file->url ); ?>" target="_blank" rel="noopener"><?php echo esc_html( (string) $file->filename ); ?></a>
+						<?php else : ?>
+							<?php echo esc_html( (string) $file->filename ); ?>
+						<?php endif; ?>
+						<span class="description"><?php echo esc_html( size_format( (int) $file->size ) ); ?></span>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+			<p class="description"><?php esc_html_e( 'Files stay on MailKite; these links expire with its retention.', 'mailkite-smtp' ); ?></p>
+			<?php
+		endif;
+		?>
 
 		<?php
 		// The rest of this conversation. thread_id is MailKite's resolved conversation
@@ -1187,10 +1204,11 @@ final class Menu {
 		// the exchange show here, oldest first.
 		$thread = [];
 		if ( ! empty( $row->thread_id ) ) {
+			global $wpdb;
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, admin read.
 			$thread = (array) $wpdb->get_results(
 				$wpdb->prepare(
-					'SELECT id, created_at, mail_to, from_addr, subject, mailer, status FROM %i WHERE thread_id = %s AND id <> %d ORDER BY id ASC LIMIT 50',
+					'SELECT id, created_at, mail_to, from_addr, subject, mailer, status FROM %i WHERE thread_id = %s AND id <> %d AND owner_user_id IS NULL ORDER BY id ASC LIMIT 50',
 					LogTable::name(),
 					(string) $row->thread_id,
 					(int) $row->id

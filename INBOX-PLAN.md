@@ -243,20 +243,20 @@ uses for its own outbound rows.
 
 ### §11 checklist
 
-**Parent — MailKite SMTP (owns endpoint + schema)**
-- [ ] 1. Schema v3: `_body` (text/html split off the list table), `_attachment` (metadata),
+**Parent — MailKite SMTP (owns endpoint + schema)** — done 2026-08-04
+- [x] 1. Schema v3: `_body` (text/html split off the list table), `_attachment` (metadata),
       `direction` and `owner_user_id` columns; migrate existing `body` values across.
-- [ ] 2. `Log\Store` — the single read/write API both plugins call. No plugin hand-writes SQL
+- [x] 2. `Log\Store` — the single read/write API both plugins call. No plugin hand-writes SQL
       against another plugin's tables.
-- [ ] 3. Inbound webhook writes through Store: text + html kept apart, attachments recorded,
+- [x] 3. Inbound webhook writes through Store: text + html kept apart, attachments recorded,
       `direction=inbound`, owner resolved via the `mailkite_smtp_mailbox_owner` filter.
-- [ ] 4. Outbound capture records `direction` and owner (matched on the From address).
-- [ ] 5. Admin Email Log excludes owned rows (a user's mail is not site mail) and reads
+- [x] 4. Outbound capture records `direction` and owner (matched on the From address).
+- [x] 5. Admin Email Log excludes owned rows (a user's mail is not site mail) and reads
       bodies from `_body`; the reader renders HTML sanitised.
-- [ ] 6. Retention splits: site mail purges on the existing schedule, mailbox mail is kept.
+- [x] 6. Retention splits: site mail purges on the existing schedule, mailbox mail is kept.
 
-**Add-on — MailKite Mailboxes (reads, never writes schema)**
-- [ ] 7. Answer `mailkite_smtp_mailbox_owner` so ingest can stamp the right user.
-- [ ] 8. Inbox lists and reads from the local Store instead of a per-view API call.
-- [ ] 9. "Sync now" backfills from the mailbox API — the repair path for anything the
+**Add-on — MailKite Mailboxes (reads, never writes schema)** — done 2026-08-04
+- [x] 7. Answer `mailkite_smtp_mailbox_owner` so ingest can stamp the right user.
+- [x] 8. Inbox lists and reads from the local Store instead of a per-view API call.
+- [x] 9. "Sync now" backfills from the mailbox API — the repair path for anything the
       webhook missed while the site was down.

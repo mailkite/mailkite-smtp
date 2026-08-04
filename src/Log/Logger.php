@@ -50,8 +50,6 @@ final class Logger {
 			return $args;
 		}
 
-		global $wpdb;
-
 		$subject = (string) ( $args['subject'] ?? '' );
 		$redact  = $this->should_redact( $subject );
 
@@ -73,23 +71,32 @@ final class Logger {
 			}
 		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom log table.
-		$wpdb->insert(
-			LogTable::name(),
+		// A mailbox user's own outgoing mail belongs to them, so their Sent folder can show
+		// it and the admin log does not.
+		$from  = '';
+		foreach ( (array) $raw_headers as $header ) {
+			if ( is_string( $header ) && preg_match( '/^\s*from\s*:\s*(.+)$/i', $header, $f ) ) {
+				$from = trim( $f[1] );
+			}
+		}
+
+		$this->current_id = Store::insert(
 			[
-				'created_at'  => current_time( 'mysql', true ),
-				'mail_to'     => implode( ', ', array_map( 'trim', (array) $to ) ),
-				'subject'     => $subject,
-				'body'        => $redact ? null : (string) ( $args['message'] ?? '' ),
-				'headers'     => wp_json_encode( $args['headers'] ?? [] ),
-				'attachments' => wp_json_encode( array_map( 'wp_basename', (array) ( $args['attachments'] ?? [] ) ) ),
-				'mailer'      => (string) Options::get( 'mailer' ),
-				'status'      => 'pending',
-				'redacted'    => $redact ? 1 : 0,
-				'thread_id'   => $thread_id,
-			]
+				'created_at'    => current_time( 'mysql', true ),
+				'mail_to'       => implode( ', ', array_map( 'trim', (array) $to ) ),
+				'from_addr'     => $from,
+				'subject'       => $subject,
+				'headers'       => wp_json_encode( $args['headers'] ?? [] ),
+				'attachments'   => wp_json_encode( array_map( 'wp_basename', (array) ( $args['attachments'] ?? [] ) ) ),
+				'mailer'        => (string) Options::get( 'mailer' ),
+				'direction'     => 'outbound',
+				'status'        => 'pending',
+				'redacted'      => $redact ? 1 : 0,
+				'owner_user_id' => '' !== $from ? Store::owner_for( $from ) : null,
+				'thread_id'     => $thread_id,
+			],
+			$redact ? '' : (string) ( $args['message'] ?? '' )
 		);
-		$this->current_id = (int) $wpdb->insert_id;
 
 		return $args;
 	}

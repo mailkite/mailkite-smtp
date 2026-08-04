@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class LogTable {
 
-	public const DB_VERSION        = '2';
+	public const DB_VERSION        = '3';
 	public const DB_VERSION_OPTION = 'mailkite_smtp_db_version';
 
 	/**
@@ -24,6 +24,20 @@ final class LogTable {
 		global $wpdb;
 
 		return $wpdb->prefix . 'mailkite_smtp_log';
+	}
+
+	/** Message bodies, split off so listing never loads them. */
+	public static function body_table(): string {
+		global $wpdb;
+
+		return $wpdb->prefix . 'mailkite_smtp_body';
+	}
+
+	/** Attachment metadata (bytes stay upstream unless a site opts in to copies). */
+	public static function attachment_table(): string {
+		global $wpdb;
+
+		return $wpdb->prefix . 'mailkite_smtp_attachment';
 	}
 
 	/**
@@ -53,14 +67,61 @@ final class LogTable {
 				from_addr TEXT NULL,
 				thread_id VARCHAR(255) NULL,
 				message_id VARCHAR(255) NULL,
+				direction VARCHAR(10) NOT NULL DEFAULT 'outbound',
+				owner_user_id BIGINT UNSIGNED NULL,
+				seen TINYINT(1) NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
 				KEY created_at (created_at),
 				KEY status (status),
-				KEY thread_id (thread_id)
+				KEY thread_id (thread_id),
+				KEY message_id (message_id),
+				KEY owner (owner_user_id, direction, id)
 			) {$charset};"
 		);
 
+		dbDelta(
+			'CREATE TABLE ' . self::body_table() . " (
+				log_id BIGINT UNSIGNED NOT NULL,
+				body_text LONGTEXT NULL,
+				body_html LONGTEXT NULL,
+				PRIMARY KEY  (log_id)
+			) {$charset};"
+		);
+
+		dbDelta(
+			'CREATE TABLE ' . self::attachment_table() . " (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				log_id BIGINT UNSIGNED NOT NULL,
+				filename TEXT NULL,
+				mime VARCHAR(190) NULL,
+				size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				url TEXT NULL,
+				PRIMARY KEY  (id),
+				KEY log_id (log_id)
+			) {$charset};"
+		);
+
+		self::migrate_bodies();
+
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION, false );
+	}
+
+	/**
+	 * Move any body still living on the list table into the body table, and label rows
+	 * that predate the direction column. One pass; the column is emptied as it goes, so
+	 * re-running is harmless.
+	 */
+	private static function migrate_bodies(): void {
+		global $wpdb;
+		$log  = self::name();
+		$body = self::body_table();
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
+		$wpdb->query( "INSERT IGNORE INTO {$body} (log_id, body_text, body_html) SELECT id, body, NULL FROM {$log} WHERE body IS NOT NULL AND body <> ''" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
+		$wpdb->query( "UPDATE {$log} SET body = NULL WHERE body IS NOT NULL AND body <> ''" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- schema migration on our own tables.
+		$wpdb->query( "UPDATE {$log} SET direction = CASE WHEN mailer = 'inbound' THEN 'inbound' ELSE 'outbound' END" );
 	}
 
 	/**
@@ -81,11 +142,18 @@ final class LogTable {
 	public static function purge( int $days ): void {
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
+		// Site mail only. A user's mailbox is their archive — clearing it on the log's
+		// housekeeping schedule would be data loss, so owned rows are never purged here.
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE log_id IN (SELECT id FROM %i WHERE owner_user_id IS NULL AND created_at < %s)', self::body_table(), self::name(), $cutoff ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table, scheduled purge.
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE log_id IN (SELECT id FROM %i WHERE owner_user_id IS NULL AND created_at < %s)', self::attachment_table(), self::name(), $cutoff ) );
 		$wpdb->query(
 			$wpdb->prepare(
-				'DELETE FROM %i WHERE created_at < %s',
+				'DELETE FROM %i WHERE owner_user_id IS NULL AND created_at < %s',
 				self::name(),
-				gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS )
+				$cutoff
 			)
 		);
 	}

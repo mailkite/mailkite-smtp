@@ -7,7 +7,7 @@
 
 namespace MailKite\Smtp;
 
-use MailKite\Smtp\Log\LogTable;
+use MailKite\Smtp\Log\Store;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -275,34 +275,42 @@ final class Inbound {
 		}
 
 		if ( Options::get( 'log_enabled' ) ) {
-			// Store the readable body so incoming mail can be READ from the Email Log
-			// (text preferred, stripped HTML as fallback), capped so a huge message
-			// can't bloat the table.
-			$body = (string) ( $message['text'] ?? '' );
-			if ( '' === $body && ! empty( $message['html'] ) ) {
-				$body = wp_strip_all_tags( (string) $message['html'] );
+			$to_list = (array) ( $message['to'] ?? [] );
+			$primary = self::format_addresses( $to_list[0] ?? $to_disp );
+			$files   = [];
+			foreach ( (array) ( $message['attachments'] ?? [] ) as $file ) {
+				if ( is_array( $file ) ) {
+					$files[] = [
+						'filename' => (string) ( $file['filename'] ?? '' ),
+						'mime'     => (string) ( $file['contentType'] ?? '' ),
+						'size'     => (int) ( $file['size'] ?? 0 ),
+						// Bytes stay upstream: a signed URL costs nothing to keep and does
+						// not put mail in a web-served directory.
+						'url'      => (string) ( $file['url'] ?? '' ),
+					];
+				}
 			}
 
-			global $wpdb;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom log table.
-			$wpdb->insert(
-				LogTable::name(),
+			Store::insert(
 				[
-					'created_at' => current_time( 'mysql', true ),
-					'mail_to'    => $to_disp,
-					'from_addr'  => $from,
-					'subject'    => $subject,
-					'body'       => mb_substr( $body, 0, 65536 ),
-					'headers'    => null,
-					'mailer'     => 'inbound',
-					'status'     => 'received',
-					'redacted'   => 0,
-					// threadId is the conversation root MailKite already resolved from
-					// In-Reply-To/References (falling back to this message's own id). Storing it
-					// is what lets a reply thread correctly and the log group a conversation.
-					'thread_id'  => (string) ( $message['threadId'] ?? $message['id'] ?? '' ),
-					'message_id' => (string) ( $message['id'] ?? '' ),
-				]
+					'created_at'    => current_time( 'mysql', true ),
+					'mail_to'       => $to_disp,
+					'from_addr'     => $from,
+					'subject'       => $subject,
+					'headers'       => null,
+					'mailer'        => 'inbound',
+					'direction'     => 'inbound',
+					'status'        => 'received',
+					'redacted'      => 0,
+					// Mail to someone's personal address belongs to THEM: stamping the owner
+					// here is what keeps it out of the site-wide admin log.
+					'owner_user_id' => Store::owner_for( $primary ),
+					'thread_id'     => (string) ( $message['threadId'] ?? $message['id'] ?? '' ),
+					'message_id'    => (string) ( $message['id'] ?? '' ),
+				],
+				(string) ( $message['text'] ?? '' ),
+				(string) ( $message['html'] ?? '' ),
+				$files
 			);
 		}
 
