@@ -240,3 +240,23 @@ uses for its own outbound rows.
 3. Add-on: inbox reads local rows for the user's address (API only as fallback/backfill).
 4. Retention split + a "sync now" repair action.
 5. Optional: opt-in local attachment storage behind the protections above.
+
+### §11 checklist
+
+**Parent — MailKite SMTP (owns endpoint + schema)**
+- [ ] 1. Schema v3: `_body` (text/html split off the list table), `_attachment` (metadata),
+      `direction` and `owner_user_id` columns; migrate existing `body` values across.
+- [ ] 2. `Log\Store` — the single read/write API both plugins call. No plugin hand-writes SQL
+      against another plugin's tables.
+- [ ] 3. Inbound webhook writes through Store: text + html kept apart, attachments recorded,
+      `direction=inbound`, owner resolved via the `mailkite_smtp_mailbox_owner` filter.
+- [ ] 4. Outbound capture records `direction` and owner (matched on the From address).
+- [ ] 5. Admin Email Log excludes owned rows (a user's mail is not site mail) and reads
+      bodies from `_body`; the reader renders HTML sanitised.
+- [ ] 6. Retention splits: site mail purges on the existing schedule, mailbox mail is kept.
+
+**Add-on — MailKite Mailboxes (reads, never writes schema)**
+- [ ] 7. Answer `mailkite_smtp_mailbox_owner` so ingest can stamp the right user.
+- [ ] 8. Inbox lists and reads from the local Store instead of a per-view API call.
+- [ ] 9. "Sync now" backfills from the mailbox API — the repair path for anything the
+      webhook missed while the site was down.
